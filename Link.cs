@@ -70,8 +70,6 @@ namespace SnooSharp
         public bool? Likes { get; set; }
         [JsonProperty("visited")]
         public bool? Visited { get; set; }
-        [JsonProperty("offlined")]
-        public bool? Offlined { get; set; }
     }
 
     public class MediaEmbed
