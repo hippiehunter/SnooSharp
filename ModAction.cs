@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace SnooSharp
 {
-    class ModAction : ThingData
+    public class ModAction : ThingData
     {
         [JsonProperty("description")]
         public string Description { get; set; }

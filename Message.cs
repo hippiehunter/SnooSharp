@@ -44,6 +44,10 @@ namespace SnooSharp
         public string Subreddit { get; set; }
         [JsonProperty("was_comment")]
         public bool WasComment { get; set; }
+        [JsonProperty("link_title")]
+        public string LinkTitle { get; set; }
+        [JsonProperty("likes")]
+        public bool? Likes { get; set; }
 
     }
 }
