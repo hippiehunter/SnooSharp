@@ -229,6 +229,8 @@ namespace SnooSharp
             }
         }
 
+        public static readonly string PostByUserBaseFormat = "http://www.reddit.com/user/{0}/";
+
         public async Task<Listing> GetPostsByUser(string username, int? limit)
         {
             var maxLimit = _userState.IsGold ? 1500 : 100;
@@ -849,7 +851,7 @@ namespace SnooSharp
             var maxLimit = _userState.IsGold ? 1500 : 100;
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
 
-            var targetUri = string.Format("http://www.reddit.com/message/{1}/.json?limit={0}", guardedLimit, kind);
+            var targetUri = string.Format(MailBaseUrlFormat + ".json?limit={1}", kind, guardedLimit);
 
             EnsureRedditCookie();
             var messages = await _httpClient.GetStringAsync(targetUri);
@@ -858,9 +860,11 @@ namespace SnooSharp
                 return new Listing { Kind = "Listing", Data = new ListingData { Children = new List<Thing>() } };
             }
             // Hacky hack mcHackerson
-            messages = messages.Replace("\"kind\": \"t1\"", "\"kind\": \"t4.5\"");
+            messages = messages.Replace("\"kind\": \"t1\"", "\"kind\": \"t4\"");
             return JsonConvert.DeserializeObject<Listing>(messages);
         }
+
+        public static readonly string MailBaseUrlFormat = "http://www.reddit.com/message/{0}/";
 
         public Task<Listing> GetModMail(int? limit)
         {

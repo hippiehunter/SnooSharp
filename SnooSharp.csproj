@@ -37,7 +37,6 @@
   <ItemGroup>
     <Compile Include="Account.cs" />
     <Compile Include="Comment.cs" />
-    <Compile Include="CommentMessage.cs" />
     <Compile Include="Converters\ThingDataConverter.cs" />
     <Compile Include="Converters\UnixTimeConverter.cs" />
     <Compile Include="Flair.cs" />
