@@ -233,6 +233,9 @@ namespace SnooSharp
 
         public async Task<Listing> GetPostsByUser(string username, int? limit)
         {
+            if (string.IsNullOrWhiteSpace(username))
+                throw new ArgumentNullException("username");
+
             var maxLimit = _userState.IsGold ? 1500 : 100;
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
 
