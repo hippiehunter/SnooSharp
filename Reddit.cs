@@ -99,10 +99,6 @@ namespace SnooSharp
             if (loginResult.IsSuccessStatusCode)
             {
                 var jsonResult = await loginResult.Content.ReadAsStringAsync();
-
-                var loginCookies = _cookieContainer.GetCookies(new Uri(loginUri));
-                var loginCookie = loginCookies["reddit_session"].Value;
-
                 var loginResultThing = JsonConvert.DeserializeObject<LoginJsonThing>(jsonResult);
                 if (loginResultThing == null || loginResultThing.Json == null ||
                     (loginResultThing.Json.Errors != null && loginResultThing.Json.Errors.Length != 0))
@@ -111,8 +107,8 @@ namespace SnooSharp
                 }
                 else
                 {
-                    var user = new User { Authenticated = true, LoginCookie = loginCookie, Username = username, NeedsCaptcha = false };
-                    user.Me = await GetMe(loginCookie);
+                    var user = new User { Authenticated = true, LoginCookie = Uri.EscapeDataString(loginResultThing.Json.Data.Cookie), Username = username, NeedsCaptcha = false };
+                    user.Me = await GetMe(loginResultThing.Json.Data.Cookie);
                     return user;
                 }
             }
@@ -247,7 +243,7 @@ namespace SnooSharp
             return await _listingFilter.Filter(newListing);
         }
 
-        public async Task<Listing> GetPostsBySubreddit(string subreddit, int? limit)
+        public async Task<Listing> GetPostsBySubreddit(string subreddit, string sort = "hot", int? limit = null)
         {
             var maxLimit = _userState.IsGold ? 1500 : 100;
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
@@ -257,7 +253,7 @@ namespace SnooSharp
                 throw new RedditNotFoundException("(null)");
             }
 
-            var targetUri = string.Format("http://www.reddit.com{0}.json?limit={1}", subreddit, guardedLimit);
+            var targetUri = string.Format("http://www.reddit.com{0}.json?limit={1}&sort={2}", subreddit, guardedLimit, sort);
 
             EnsureRedditCookie();
             var listing = await _httpClient.GetStringAsync(targetUri);
