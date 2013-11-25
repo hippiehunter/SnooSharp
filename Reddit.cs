@@ -560,7 +560,7 @@ namespace SnooSharp
                     urlEncodedData.Add("captcha", Captcha);
             }
 
-            await ThrottleRequests();
+            
             EnsureRedditCookie();
             HttpResponseMessage response = null;
 
@@ -568,6 +568,7 @@ namespace SnooSharp
             {
                 try
                 {
+                    await ThrottleRequests();
                     response = await _httpClient.PostAsync(uri, new FormUrlEncodedContent(urlEncodedData));
                 }
                 catch(WebException ex)
