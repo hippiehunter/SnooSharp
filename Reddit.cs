@@ -72,6 +72,7 @@ namespace SnooSharp
         //this one is seperated out so we can use it interally on initial user login
         public async Task<Account> GetMe(string loginCookie)
         {
+            await ThrottleRequests();
             EnsureRedditCookie();
             var meString = await _httpClient.GetStringAsync("http://www.reddit.com/api/me.json");
             if (!string.IsNullOrWhiteSpace(meString) && meString != "{}")
@@ -93,6 +94,7 @@ namespace SnooSharp
                 new KeyValuePair<string, string>("passwd", password)
             });
 
+            await ThrottleRequests();
             var loginResult = await _httpClient.PostAsync(loginUri, content);
 
 
@@ -135,6 +137,7 @@ namespace SnooSharp
             {
                 targetUri = string.Format("http://www.reddit.com/r/{2}/search.json?limit={0}&q={1}&restrict_sr=on", guardedLimit, query, restrictedToSubreddit);
             }
+            await ThrottleRequests();
             EnsureRedditCookie();
             var listing = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(listing);
@@ -144,7 +147,7 @@ namespace SnooSharp
         public async Task<Thing> GetThingById(string id)
         {
             var targetUri = string.Format("http://www.reddit.com/by_id/{0}.json", id);
-
+            await ThrottleRequests();
             EnsureRedditCookie();
             var thingStr = await _httpClient.GetStringAsync(targetUri);
             if(thingStr.StartsWith("{\"kind\": \"Listing\""))
@@ -162,7 +165,7 @@ namespace SnooSharp
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
 
             var targetUri = string.Format("http://www.reddit.com/reddits/.json?limit={0}", guardedLimit);
-
+            await ThrottleRequests();
             EnsureRedditCookie();
             var subreddits = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(subreddits);
@@ -182,6 +185,7 @@ namespace SnooSharp
             if (!name.Contains("/m/"))
             {
                 targetUri = string.Format("http://www.reddit.com/r/{0}/about.json", name);
+                await ThrottleRequests();
                 EnsureRedditCookie();
                 var subreddit = await _httpClient.GetStringAsync(targetUri);
                 //error page
@@ -205,6 +209,7 @@ namespace SnooSharp
                 }
 
                 targetUri = string.Format("http://www.reddit.com/api/multi/{0}.json", name);
+                await ThrottleRequests();
                 EnsureRedditCookie();
                 var subreddit = await _httpClient.GetStringAsync(targetUri);
                 //error page
@@ -236,6 +241,7 @@ namespace SnooSharp
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
 
             var targetUri = string.Format("http://www.reddit.com/user/{0}/.json?limit={1}", username, guardedLimit);
+            await ThrottleRequests();
             EnsureRedditCookie();
             var listing = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(listing);
@@ -255,6 +261,7 @@ namespace SnooSharp
 
             var targetUri = string.Format("http://www.reddit.com{0}.json?limit={1}&sort={2}", subreddit, guardedLimit, sort);
 
+            await ThrottleRequests();
             EnsureRedditCookie();
             var listing = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(listing);
@@ -284,6 +291,7 @@ namespace SnooSharp
             {
                 arguments.Add("r", subreddit);
             }
+            await ThrottleRequests();
             EnsureRedditCookie();
             var result = await _httpClient.PostAsync(targetUri, new FormUrlEncodedContent(arguments));
             var resultString = await result.Content.ReadAsStringAsync();
@@ -313,6 +321,7 @@ namespace SnooSharp
             }
 
             Listing listing = null;
+            await ThrottleRequests();
             EnsureRedditCookie();
             var json = await _httpClient.GetStringAsync(url);
             if (json.StartsWith("["))
@@ -368,6 +377,7 @@ namespace SnooSharp
             }
 
             Listing listing = null;
+            await ThrottleRequests();
             EnsureRedditCookie();
             var comments = await _httpClient.GetStringAsync(targetUri);
             if (comments.StartsWith("["))
@@ -421,6 +431,7 @@ namespace SnooSharp
             else
                 targetUri = string.Format("{0}.json?limit={1}&after={2}", baseUrl, guardedLimit, after);
 
+            await ThrottleRequests();
             EnsureRedditCookie();
             var listing = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(listing);
@@ -433,6 +444,7 @@ namespace SnooSharp
         {
             var targetUri = string.Format("http://www.reddit.com/user/{0}/about.json", accountName);
 
+            await ThrottleRequests();
             EnsureRedditCookie();
             var account = await _httpClient.GetStringAsync(targetUri);
             return new TypedThing<Account>(JsonConvert.DeserializeObject<Thing>(account));
@@ -548,7 +560,7 @@ namespace SnooSharp
                     urlEncodedData.Add("captcha", Captcha);
             }
 
-
+            await ThrottleRequests();
             EnsureRedditCookie();
             HttpResponseMessage response = null;
 
@@ -610,6 +622,7 @@ namespace SnooSharp
 
         private async Task BasicPost(Dictionary<string, string> arguments, string url)
         {
+            await ThrottleRequests();
             HttpResponseMessage responseMessage = null;
             try
             {
@@ -714,6 +727,7 @@ namespace SnooSharp
         private async Task<Listing> GetUserMultis(Listing listing)
         {
             var targetUri = string.Format("http://www.reddit.com/api/multi/mine.json");
+            await ThrottleRequests();
             EnsureRedditCookie();
             var subreddits = await _httpClient.GetStringAsync(targetUri);
             if (subreddits == "[]")
@@ -740,6 +754,7 @@ namespace SnooSharp
             var maxLimit = _userState.IsGold ? 1500 : 100;
 
             var targetUri = string.Format("http://www.reddit.com/reddits/mine.json?limit={0}", maxLimit);
+            await ThrottleRequests();
             EnsureRedditCookie();
             var subreddits = await _httpClient.GetStringAsync(targetUri);
 
@@ -757,6 +772,7 @@ namespace SnooSharp
 
         public async Task<bool> CheckLogin(string loginToken)
         {
+            await ThrottleRequests();
             EnsureRedditCookie();
             var meString = await _httpClient.GetStringAsync("http://www.reddit.com/api/me.json");
             return (!string.IsNullOrWhiteSpace(meString) && meString != "{}");
@@ -778,7 +794,7 @@ namespace SnooSharp
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
 
             var targetUri = string.Format("http://www.reddit.com/user/{0}/{2}/.json?limit={1}", _userState.Username, guardedLimit, kind);
-
+            await ThrottleRequests();
             EnsureRedditCookie();
             var info = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(info);
@@ -836,6 +852,7 @@ namespace SnooSharp
 
             var targetUri = string.Format("http://www.reddit.com/r/{0}/about/log.json?limi={1}", subreddit, guardedLimit);
 
+            await ThrottleRequests();
             EnsureRedditCookie();
             var messages = await _httpClient.GetStringAsync(targetUri);
             if (messages == "\"{}\"")
@@ -852,6 +869,7 @@ namespace SnooSharp
 
             var targetUri = string.Format(MailBaseUrlFormat + ".json?limit={1}", kind, guardedLimit);
 
+            await ThrottleRequests();
             EnsureRedditCookie();
             var messages = await _httpClient.GetStringAsync(targetUri);
             if (messages == "\"{}\"")
@@ -954,6 +972,48 @@ namespace SnooSharp
         public Task RemoveBan(string subreddit, string name)
         {
             return Unfriend(name, subreddit, "banned");
+        }
+
+        static DateTime _priorRequestSet = new DateTime();
+        static int _requestSetCount = 0;
+        static DateTime _lastRequestMade = new DateTime();
+
+        //dont hammer reddit!
+        //Make no more than thirty requests per minute. This allows some burstiness to your requests, 
+        //but keep it sane. On average, we should see no more than one request every two seconds from you.
+        //the above statement is from the reddit api docs, but its not quite true, there are some api's that have logging 
+        //set for 15 requests in 30 seconds, so we can allow some burstiness but it must fit in the 15 requests/30 seconds rule
+        public static async Task ThrottleRequests()
+        {
+            var offset = DateTime.Now - _lastRequestMade;
+            if (offset.TotalMilliseconds < 1000)
+            {
+                await Task.Delay(1000 - (int)offset.TotalMilliseconds);
+            }
+
+            if (_requestSetCount > 15)
+            {
+                var overallOffset = DateTime.Now - _priorRequestSet;
+
+                if (overallOffset.TotalSeconds < 30)
+                {
+                    var delay = (30 - (int)overallOffset.TotalSeconds) * 1000;
+                    if (delay > 2)
+                    {
+                        for (int i = 0; i < delay; i++)
+                        {
+                            await Task.Delay(1000);
+                        }
+                    }
+                    else
+                        await Task.Delay(delay);
+                }
+                _requestSetCount = 0;
+                _priorRequestSet = DateTime.Now;
+            }
+            _requestSetCount++;
+
+            _lastRequestMade = DateTime.Now;
         }
     }
 }
