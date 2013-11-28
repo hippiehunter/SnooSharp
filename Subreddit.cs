@@ -12,6 +12,20 @@ namespace SnooSharp
     [DataContract]
     public class Subreddit : ThingData, ICreated
     {
+        public Subreddit() { }
+        public Subreddit(string target)
+        {
+            Description = "not loaded yet";
+            DisplayName = target.Split(new char[] {'/'}, StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+            Over18 = false;
+            Subscribers = 1;
+            Title = DisplayName;
+            Url = target;
+            HeaderImage = "http://www.redditstatic.com/icon.png";
+            PublicDescription = Description;
+            Headertitle = DisplayName;
+        }
+
         [JsonProperty("description")]
         public string Description { get; set; }
         [JsonProperty("display_name")]
