@@ -408,7 +408,7 @@ namespace SnooSharp
 
         public Task<Listing> GetMessages(int? limit)
         {
-            return GetMail("messages", limit);
+            return GetMail("inbox", limit);
         }
 
         public void AddFlairInfo(string linkId, string opName)
@@ -851,7 +851,7 @@ namespace SnooSharp
             var maxLimit = _userState.IsGold ? 1500 : 100;
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
 
-            var targetUri = string.Format("http://www.reddit.com/r/{0}/about/log.json?limi={1}", subreddit, guardedLimit);
+            var targetUri = string.Format("http://www.reddit.com/r/{0}/about/log.json?limit={1}", subreddit, guardedLimit);
 
             await ThrottleRequests();
             EnsureRedditCookie();
