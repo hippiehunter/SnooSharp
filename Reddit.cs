@@ -36,6 +36,8 @@ namespace SnooSharp
                                                  DecompressionMethods.Deflate;
             }
             _httpClient = new HttpClient(handler);
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SnooStream");
+            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cache-Control", "no-cache");
         }
 
         public string CurrentUserName
