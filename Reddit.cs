@@ -36,8 +36,8 @@ namespace SnooSharp
                                                  DecompressionMethods.Deflate;
             }
             _httpClient = new HttpClient(handler);
-            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SnooStream");
-            _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cache-Control", "no-cache");
+            //_httpClient.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "SnooStream");
+            //_httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cache-Control", "no-cache");
         }
 
         public string CurrentUserName
@@ -421,7 +421,7 @@ namespace SnooSharp
             }
         }
 
-        public async Task<Listing> GetAdditionalFromListing(string baseUrl, string after, int? limit)
+        public async Task<Listing> GetAdditionalFromListing(string baseUrl, string after, int? limit = null)
         {
             var maxLimit = _userState.IsGold ? 1500 : 500;
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
