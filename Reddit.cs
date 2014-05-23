@@ -284,7 +284,7 @@ namespace SnooSharp
             var arguments = new Dictionary<string, string>
             {
                 {"children", string.Join(",", childrenIds) },
-                {"link_id", contentId },
+                {"link_id", contentId.Contains("_") ? contentId : "t3_" + contentId },
                 {"pv_hex", ""},
                 {"api_type", "json" }
             };
