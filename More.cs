@@ -11,6 +11,12 @@ namespace SnooSharp
     [DataContract]
     public class More : IThingData
     {
+		[JsonProperty("parent_id")]
+		public string ParentId { get; set; }
+
+		[JsonProperty("count")]
+		public int Count { get; set; }
+
         [JsonProperty("children")]
         public List<string> Children { get; set; }
     }

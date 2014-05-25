@@ -269,21 +269,24 @@ namespace SnooSharp
             var newListing = JsonConvert.DeserializeObject<Listing>(listing);
             return await _listingFilter.Filter(newListing);
         }
-
-        public async Task<Listing> GetMoreOnListing(IEnumerable<string> childrenIds, string contentId, string subreddit)
+		private static int getMoreCount = 0;
+        public async Task<Listing> GetMoreOnListing(More more, string contentId, string subreddit)
         {
             var targetUri = "http://www.reddit.com/api/morechildren.json";
 
-            if (childrenIds.Count() == 0)
+            if (more.Children.Count == 0)
                 return new Listing
                 {
                     Kind = "Listing",
                     Data = new ListingData()
                 };
 
+			var viableChildren = more.Children.Take(20);
+			var leftovers = more.Children.Skip(20);
+
             var arguments = new Dictionary<string, string>
             {
-                {"children", string.Join(",", childrenIds) },
+                {"children", string.Join(",", viableChildren) },
                 {"link_id", contentId.Contains("_") ? contentId : "t3_" + contentId },
                 {"pv_hex", ""},
                 {"api_type", "json" }
@@ -293,6 +296,7 @@ namespace SnooSharp
             {
                 arguments.Add("r", subreddit);
             }
+			getMoreCount++;
             await ThrottleRequests();
             EnsureRedditCookie();
             var result = await _httpClient.PostAsync(targetUri, new FormUrlEncodedContent(arguments));
@@ -303,7 +307,15 @@ namespace SnooSharp
                 Data = new ListingData { Children = JsonConvert.DeserializeObject<JsonThing>(resultString).Json.Data.Things }
             };
 
+			if (leftovers.Count() > 0)
+			{
+				newListing.Data.Children.Add(new Thing { Kind = "more", Data = new More { Children = new List<string>(leftovers), ParentId = more.ParentId, Count = (more.Count - viableChildren.Count()) } });
+			}
+			if(getMoreCount != 0)
+
             return newListing;
+			else
+				return newListing;
         }
 
         public async Task<Thing> GetLinkByUrl(string url)
