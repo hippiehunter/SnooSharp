@@ -232,7 +232,7 @@ namespace SnooSharp
             }
         }
 
-        public static readonly string PostByUserBaseFormat = "http://www.reddit.com/user/{0}/";
+        public static readonly string PostByUserBaseFormat = "/user/{0}/";
 
         public async Task<Listing> GetPostsByUser(string username, int? limit)
         {
@@ -882,7 +882,7 @@ namespace SnooSharp
             var maxLimit = _userState.IsGold ? 1500 : 100;
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
 
-            var targetUri = string.Format(MailBaseUrlFormat + ".json?limit={1}", kind, guardedLimit);
+			var targetUri = string.Format(MailRootedUrlFormat + ".json?limit={1}", kind, guardedLimit);
 
             await ThrottleRequests();
             EnsureRedditCookie();
@@ -896,7 +896,8 @@ namespace SnooSharp
             return JsonConvert.DeserializeObject<Listing>(messages);
         }
 
-        public static readonly string MailBaseUrlFormat = "http://www.reddit.com/message/{0}/";
+		public static readonly string MailRootedUrlFormat = "http://www.reddit.com/message/{0}/";
+		public static readonly string MailBaseUrlFormat = "/message/{0}/";
 
         public Task<Listing> GetModMail(int? limit)
         {
