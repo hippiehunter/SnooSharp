@@ -15,8 +15,9 @@ namespace SnooSharp
         public Subreddit() { }
         public Subreddit(string target)
         {
+			var displayName = target.Split(new char[] { '/' }, StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
             Description = "not loaded yet";
-            DisplayName = target.Split(new char[] {'/'}, StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+			DisplayName = string.IsNullOrWhiteSpace(displayName) ? "front page" : displayName;
             Over18 = false;
             Subscribers = 1;
             Title = DisplayName;
@@ -24,6 +25,8 @@ namespace SnooSharp
             HeaderImage = "http://www.redditstatic.com/icon.png";
             PublicDescription = Description;
             Headertitle = DisplayName;
+			if (target == "/")
+				Id = "front page";
         }
 
         [JsonProperty("description")]
