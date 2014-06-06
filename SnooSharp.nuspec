@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>$id$</id>
+    <version>$version$</version>
+    <title>$title$</title>
+    <authors>HippieHunter</authors>
+    <owners>HippieHunter</owners>
+    <projectUrl>http://www.github.com/HippieHunter/SnooSharp</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>PCL for using the Reddit API</description>
+    <copyright>Copyright 2014</copyright>
+    <tags>reddit</tags>
+  </metadata>
+</package>
