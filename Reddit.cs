@@ -1,6 +1,5 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using SnooSharp.Properties;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -779,9 +778,19 @@ namespace SnooSharp
                 return JsonConvert.DeserializeObject<Listing>(subreddits);
         }
 
-        public Task<Listing> GetDefaultSubreddits()
+        public async Task<Listing> GetDefaultSubreddits()
         {
-            return Task.FromResult(JsonConvert.DeserializeObject<Listing>(Resources.DefaultSubreddits + Resources.DefaultSubreddits2 + Resources.DefaultSubreddits3));
+			var maxLimit = 25;
+
+			var targetUri = string.Format("http://www.reddit.com/subreddits/popular.json?limit={0}", maxLimit);
+			await ThrottleRequests();
+			EnsureRedditCookie();
+			var subreddits = await _httpClient.GetStringAsync(targetUri);
+
+			if (subreddits == "\"{}\"")
+				return new Listing { Data = new ListingData { Children = new List<Thing> { new Thing { Kind = "t3", Data = new Subreddit { Headertitle = "/", Name = "/" } } } } };
+			else
+				return JsonConvert.DeserializeObject<Listing>(subreddits);
         }
 
 
