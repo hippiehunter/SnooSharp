@@ -119,30 +119,33 @@ namespace SnooSharp
                 throw new RedditException(loginResult.StatusCode.ToString());
         }
 
-        public async Task<Listing> Search(string query, int? limit, bool reddits, string restrictedToSubreddit)
+        public async Task<Tuple<string, Listing>> Search(string query, int? limit, bool reddits, string restrictedToSubreddit)
         {
             var maxLimit = _userState.IsGold ? 1500 : 100;
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
 
             string targetUri = null;
-
+			string afterUri = null;
             if (reddits)
             {
                 targetUri = string.Format("http://www.reddit.com/subreddits/search.json?limit={0}&q={1}", guardedLimit, query);
+				afterUri = string.Format("/subreddits/search.json?q={0}", query);
             }
             else if (string.IsNullOrWhiteSpace(restrictedToSubreddit))
             {
                 targetUri = string.Format("http://www.reddit.com/search.json?limit={0}&q={1}", guardedLimit, query);
+				afterUri = string.Format("/search.json&q={0}", query);
             }
             else
             {
                 targetUri = string.Format("http://www.reddit.com/r/{2}/search.json?limit={0}&q={1}&restrict_sr=on", guardedLimit, query, restrictedToSubreddit);
+				afterUri = string.Format("/subreddits/r/{1}/search.json?q={0}&restrict_sr=on", query, restrictedToSubreddit);
             }
             await ThrottleRequests();
             EnsureRedditCookie();
             var listing = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(listing);
-            return await _listingFilter.Filter(newListing);
+            return Tuple.Create(afterUri, await _listingFilter.Filter(newListing));
         }
 
         public async Task<Thing> GetThingById(string id)
