@@ -39,6 +39,51 @@ namespace SnooSharp
             //_httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cache-Control", "no-cache");
         }
 
+		private string RedditBaseUrl = "http://www.reddit.com";
+
+		public async Task<RedditOAuth> RequestGrantCode(string appId, string appSecret, string code)
+		{
+			//we're messing with the headers here so use a different client
+			var httpClient = new HttpClient();
+			httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(System.Text.UTF8Encoding.UTF8.GetBytes(string.Format("{0}:{1}", appId, appSecret))));
+			var result = await httpClient.PostAsync(new Uri("https://ssl.reddit.com/api/v1/access_token"), new FormUrlEncodedContent(new Dictionary<string, string>
+				{
+					{"grant_type", "authorization_code"},
+					{"code", code},
+					{"redirect_uri", "http://www.google.com"}, //this is basically just a magic string that needs to match with reddit's app registry
+				}));
+			var jsonResult = await result.Content.ReadAsStringAsync();
+			return JsonConvert.DeserializeObject<RedditOAuth>(jsonResult);
+		}
+
+		public async Task<RedditOAuth> RefreshToken(string appId, string appSecret, string refreshToken)
+		{
+			//we're messing with the headers here so use a different client
+			var httpClient = new HttpClient();
+			httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(System.Text.UTF8Encoding.UTF8.GetBytes(string.Format("{0}:{1}", appId, appSecret))));
+			var result = await httpClient.PostAsync(new Uri("https://ssl.reddit.com/api/v1/access_token"), new FormUrlEncodedContent(new Dictionary<string, string>
+				{
+					{"grant_type", "refresh_token"},
+					{"refresh_token", refreshToken},
+				}));
+			var jsonResult = await result.Content.ReadAsStringAsync();
+			var oAuth = JsonConvert.DeserializeObject<RedditOAuth>(jsonResult);
+			oAuth.RefreshToken = refreshToken; //this is to make life a bit easier, since you would need to keep track of this thing anyway
+			return oAuth;
+		}
+
+		public async Task DestroyToken(string appId, string appSecret, string refreshToken)
+		{
+			//we're messing with the headers here so use a different client
+			var httpClient = new HttpClient();
+			httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(System.Text.UTF8Encoding.UTF8.GetBytes(string.Format("{0}:{1}", appId, appSecret))));
+			var result = await httpClient.PostAsync(new Uri("https://ssl.reddit.com/api/v1/revoke_token"), new FormUrlEncodedContent(new Dictionary<string, string>
+				{
+					{"token", refreshToken},
+					{"token_type_hint", "refresh_token"},
+				}));
+		}
+
         public string CurrentUserName
         {
             get
@@ -60,9 +105,15 @@ namespace SnooSharp
         {
             if (_userState.LoginCookie != null)
             {
-                var redditUri = new Uri("http://www.reddit.com");
+				RedditBaseUrl = "http://www.reddit.com";
+				var redditUri = new Uri(RedditBaseUrl);
                 _cookieContainer.Add(redditUri, new Cookie("reddit_session", _userState.LoginCookie));
             }
+			else if (_userState.OAuth != null)
+			{
+				RedditBaseUrl = "https://oauth.reddit.com";
+				//see if we need to refresh the token
+			}
         }
 
         public async Task<Account> GetMe()

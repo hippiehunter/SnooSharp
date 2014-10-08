@@ -61,6 +61,7 @@
     <Compile Include="ModAction.cs" />
     <Compile Include="More.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RedditAuthentication.cs" />
     <Compile Include="RedditException.cs" />
     <Compile Include="Reddit.cs" />
     <Compile Include="Subreddit.cs" />
