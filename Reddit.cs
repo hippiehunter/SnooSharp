@@ -19,15 +19,19 @@ namespace SnooSharp
         ICaptchaProvider _captchaProvider;
         HttpClient _httpClient;
         CookieContainer _cookieContainer;
-        public Reddit(IListingFilter listingFilter, UserState userState, IActionDeferralSink deferalSink, ICaptchaProvider captchaProvider)
+		string _appId;
+		string _appSecret;
+		string _redirectUrl;
+		public Reddit(IListingFilter listingFilter, UserState userState, IActionDeferralSink deferalSink, ICaptchaProvider captchaProvider, string appId = null, string appSecret = null, string redirectUrl = null)
         {
             _listingFilter = listingFilter;
             _userState = userState;
             _deferalSink = deferalSink;
             _captchaProvider = captchaProvider;
-
+			_appId = appId;
+			_appSecret = appSecret;
+			_redirectUrl = redirectUrl;
             _cookieContainer = new CookieContainer();
-            EnsureRedditCookie();
             var handler = new HttpClientHandler { CookieContainer = _cookieContainer };
             if (handler.SupportsAutomaticDecompression)
             {
@@ -39,28 +43,37 @@ namespace SnooSharp
             //_httpClient.DefaultRequestHeaders.TryAddWithoutValidation("Cache-Control", "no-cache");
         }
 
-		private string RedditBaseUrl = "http://www.reddit.com";
+		private string RedditBaseUrl
+		{
+			get
+			{
+				if (_userState != null && _userState.OAuth != null)
+					return "https://oauth.reddit.com";
+				else
+					return "http://www.reddit.com";
+			}
+		}
 
-		public async Task<RedditOAuth> RequestGrantCode(string appId, string appSecret, string code)
+		public async Task<RedditOAuth> RequestGrantCode(string code)
 		{
 			//we're messing with the headers here so use a different client
 			var httpClient = new HttpClient();
-			httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(System.Text.UTF8Encoding.UTF8.GetBytes(string.Format("{0}:{1}", appId, appSecret))));
+			httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(System.Text.UTF8Encoding.UTF8.GetBytes(string.Format("{0}:{1}", _appId, _appSecret))));
 			var result = await httpClient.PostAsync(new Uri("https://ssl.reddit.com/api/v1/access_token"), new FormUrlEncodedContent(new Dictionary<string, string>
 				{
 					{"grant_type", "authorization_code"},
 					{"code", code},
-					{"redirect_uri", "http://www.google.com"}, //this is basically just a magic string that needs to match with reddit's app registry
+					{"redirect_uri", _redirectUrl}, //this is basically just a magic string that needs to match with reddit's app registry
 				}));
 			var jsonResult = await result.Content.ReadAsStringAsync();
 			return JsonConvert.DeserializeObject<RedditOAuth>(jsonResult);
 		}
 
-		public async Task<RedditOAuth> RefreshToken(string appId, string appSecret, string refreshToken)
+		public async Task<RedditOAuth> RefreshToken(string refreshToken)
 		{
 			//we're messing with the headers here so use a different client
 			var httpClient = new HttpClient();
-			httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(System.Text.UTF8Encoding.UTF8.GetBytes(string.Format("{0}:{1}", appId, appSecret))));
+			httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(System.Text.UTF8Encoding.UTF8.GetBytes(string.Format("{0}:{1}", _appId, _appSecret))));
 			var result = await httpClient.PostAsync(new Uri("https://ssl.reddit.com/api/v1/access_token"), new FormUrlEncodedContent(new Dictionary<string, string>
 				{
 					{"grant_type", "refresh_token"},
@@ -72,11 +85,11 @@ namespace SnooSharp
 			return oAuth;
 		}
 
-		public async Task DestroyToken(string appId, string appSecret, string refreshToken)
+		public async Task DestroyToken(string refreshToken)
 		{
 			//we're messing with the headers here so use a different client
 			var httpClient = new HttpClient();
-			httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(System.Text.UTF8Encoding.UTF8.GetBytes(string.Format("{0}:{1}", appId, appSecret))));
+			httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(System.Text.UTF8Encoding.UTF8.GetBytes(string.Format("{0}:{1}", _appId, _appSecret))));
 			var result = await httpClient.PostAsync(new Uri("https://ssl.reddit.com/api/v1/revoke_token"), new FormUrlEncodedContent(new Dictionary<string, string>
 				{
 					{"token", refreshToken},
@@ -101,18 +114,20 @@ namespace SnooSharp
             }
         }
 
-        private void EnsureRedditCookie()
+        private async Task EnsureRedditCookie()
         {
             if (_userState.LoginCookie != null)
             {
-				RedditBaseUrl = "http://www.reddit.com";
 				var redditUri = new Uri(RedditBaseUrl);
                 _cookieContainer.Add(redditUri, new Cookie("reddit_session", _userState.LoginCookie));
             }
 			else if (_userState.OAuth != null)
 			{
-				RedditBaseUrl = "https://oauth.reddit.com";
 				//see if we need to refresh the token
+				if (_userState.OAuth.ExpiresIn > DateTime.UtcNow)
+				{
+					_userState.OAuth = await RefreshToken(_userState.OAuth.RefreshToken);
+				}
 			}
         }
 
@@ -125,7 +140,7 @@ namespace SnooSharp
         public async Task<Account> GetMe(string loginCookie)
         {
             await ThrottleRequests();
-            EnsureRedditCookie();
+            await EnsureRedditCookie();
             var meString = await _httpClient.GetStringAsync("http://www.reddit.com/api/me.json");
             if (!string.IsNullOrWhiteSpace(meString) && meString != "{}")
             {
@@ -193,7 +208,7 @@ namespace SnooSharp
 				afterUri = string.Format("/subreddits/r/{1}/search.json?q={0}&restrict_sr=on", query, restrictedToSubreddit);
             }
             await ThrottleRequests();
-            EnsureRedditCookie();
+            await EnsureRedditCookie();
             var listing = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(listing);
             return Tuple.Create(afterUri, await _listingFilter.Filter(newListing));
@@ -203,7 +218,7 @@ namespace SnooSharp
         {
             var targetUri = string.Format("http://www.reddit.com/by_id/{0}.json", id);
             await ThrottleRequests();
-            EnsureRedditCookie();
+            await EnsureRedditCookie();
             var thingStr = await _httpClient.GetStringAsync(targetUri);
             if(thingStr.StartsWith("{\"kind\": \"Listing\""))
             {
@@ -221,7 +236,7 @@ namespace SnooSharp
 
             var targetUri = string.Format("http://www.reddit.com/reddits/.json?limit={0}", guardedLimit);
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var subreddits = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(subreddits);
 
@@ -241,7 +256,7 @@ namespace SnooSharp
             {
                 targetUri = string.Format("http://www.reddit.com/r/{0}/about.json", name);
                 await ThrottleRequests();
-                EnsureRedditCookie();
+				await EnsureRedditCookie();
                 var subreddit = await _httpClient.GetStringAsync(targetUri);
                 //error page
                 if (subreddit.ToLower().StartsWith("<!doctype html>"))
@@ -265,7 +280,7 @@ namespace SnooSharp
 
                 targetUri = string.Format("http://www.reddit.com/api/multi/{0}.json", name);
                 await ThrottleRequests();
-                EnsureRedditCookie();
+				await EnsureRedditCookie();
                 var subreddit = await _httpClient.GetStringAsync(targetUri);
                 //error page
                 if (subreddit.ToLower().StartsWith("<!doctype html>"))
@@ -297,7 +312,7 @@ namespace SnooSharp
 
             var targetUri = string.Format("http://www.reddit.com/user/{0}/.json?limit={1}", username, guardedLimit);
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var listing = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(listing);
 
@@ -317,7 +332,7 @@ namespace SnooSharp
             var targetUri = string.Format("http://www.reddit.com{0}.json?limit={1}&sort={2}", subreddit, guardedLimit, sort);
 
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var listing = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(listing);
             return await _listingFilter.Filter(newListing);
@@ -351,7 +366,7 @@ namespace SnooSharp
             }
 			getMoreCount++;
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var result = await _httpClient.PostAsync(targetUri, new FormUrlEncodedContent(arguments));
             var resultString = await result.Content.ReadAsStringAsync();
             var newListing = new Listing
@@ -389,7 +404,7 @@ namespace SnooSharp
 
             Listing listing = null;
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var json = await _httpClient.GetStringAsync(url);
             if (json.StartsWith("["))
             {
@@ -445,7 +460,7 @@ namespace SnooSharp
 
             Listing listing = null;
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var comments = await _httpClient.GetStringAsync(targetUri);
             if (comments.StartsWith("["))
             {
@@ -499,7 +514,7 @@ namespace SnooSharp
 				targetUri = string.Format("http://www.reddit.com{0}.json?limit={1}&after={2}", baseUrl, guardedLimit, after);
 
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var listing = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(listing);
 
@@ -512,7 +527,7 @@ namespace SnooSharp
             var targetUri = string.Format("http://www.reddit.com/user/{0}/about.json", accountName);
 
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var account = await _httpClient.GetStringAsync(targetUri);
             return new TypedThing<Account>(JsonConvert.DeserializeObject<Thing>(account));
 
@@ -627,8 +642,8 @@ namespace SnooSharp
                     urlEncodedData.Add("captcha", Captcha);
             }
 
-            
-            EnsureRedditCookie();
+
+			await EnsureRedditCookie();
             HttpResponseMessage response = null;
 
             do
@@ -796,7 +811,7 @@ namespace SnooSharp
         {
             var targetUri = string.Format("http://www.reddit.com/api/multi/mine.json");
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var subreddits = await _httpClient.GetStringAsync(targetUri);
             if (subreddits == "[]")
                 return listing;
@@ -823,7 +838,7 @@ namespace SnooSharp
 
             var targetUri = string.Format("http://www.reddit.com/reddits/mine.json?limit={0}", maxLimit);
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var subreddits = await _httpClient.GetStringAsync(targetUri);
 
             if (subreddits == "\"{}\"")
@@ -838,7 +853,7 @@ namespace SnooSharp
 
 			var targetUri = string.Format("http://www.reddit.com/subreddits/popular.json?limit={0}", maxLimit);
 			await ThrottleRequests();
-			EnsureRedditCookie();
+			await EnsureRedditCookie();
 			var subreddits = await _httpClient.GetStringAsync(targetUri);
 
 			if (subreddits == "\"{}\"")
@@ -851,7 +866,7 @@ namespace SnooSharp
         public async Task<bool> CheckLogin(string loginToken)
         {
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var meString = await _httpClient.GetStringAsync("http://www.reddit.com/api/me.json");
             return (!string.IsNullOrWhiteSpace(meString) && meString != "{}");
         }
@@ -873,7 +888,7 @@ namespace SnooSharp
 
             var targetUri = string.Format("http://www.reddit.com/user/{0}/{2}/.json?limit={1}", _userState.Username, guardedLimit, kind);
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var info = await _httpClient.GetStringAsync(targetUri);
             var newListing = JsonConvert.DeserializeObject<Listing>(info);
 
@@ -931,7 +946,7 @@ namespace SnooSharp
             var targetUri = string.Format("http://www.reddit.com/r/{0}/about/log.json?limit={1}", subreddit, guardedLimit);
 
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var messages = await _httpClient.GetStringAsync(targetUri);
             if (messages == "\"{}\"")
             {
@@ -948,7 +963,7 @@ namespace SnooSharp
 			var targetUri = string.Format(MailRootedUrlFormat + ".json?limit={1}", kind, guardedLimit);
 
             await ThrottleRequests();
-            EnsureRedditCookie();
+			await EnsureRedditCookie();
             var messages = await _httpClient.GetStringAsync(targetUri);
             if (messages == "\"{}\"")
             {
