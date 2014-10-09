@@ -23,6 +23,10 @@ namespace SnooSharp
         public string Author { get; set; }
         [JsonProperty("author_flair_css_class")]
         public string AuthorFlairCssClass { get; set; }
+		[JsonProperty("link_flair_css_class")]
+		public string LinkFlairCssClass { get; set; }
+		[JsonProperty("link_flair_text")]
+		public string LinkFlairText { get; set; }
         [JsonProperty("author_flair_text")]
         public string AuthorFlairText { get; set; }
         [JsonProperty("clicked")]
