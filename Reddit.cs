@@ -349,7 +349,7 @@ namespace SnooSharp
                 throw new RedditNotFoundException("(null)");
             }
 
-            var targetUri = string.Format("{3}{0}.json?limit={1}&sort={2}", subreddit, guardedLimit, sort, RedditBaseUrl);
+            var targetUri = string.Format("{3}{0}/{2}.json?limit={1}", subreddit, guardedLimit, sort, RedditBaseUrl);
 
             await ThrottleRequests();
 			await EnsureRedditCookie();
