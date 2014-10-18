@@ -10,6 +10,8 @@ namespace SnooSharp
 {
     public class Account : ThingData
     {
+		[JsonProperty("gold_credits")]
+		public int GoldCredits { get; set; }
         [JsonProperty("comment_karma")]
         public int CommentKarma { get; set; }
         [JsonConverter(typeof(UnixTimeConverter))]
@@ -18,6 +20,9 @@ namespace SnooSharp
         [JsonConverter(typeof(UnixUTCTimeConverter))]
         [JsonProperty("created_utc")]
         public DateTime CreatedUTC { get; set; }
+
+		[JsonProperty("over_18", NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Populate)]
+		public bool Over18 { get; set; }
 
         [JsonProperty("has_mail", NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Populate)]
         public bool HasMail { get; set; }

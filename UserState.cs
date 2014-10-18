@@ -14,5 +14,6 @@ namespace SnooSharp
         public string ModHash { get; set; }
         public bool IsGold { get; set; }
         public bool NeedsCaptcha { get; set; }
+		public bool IsDefault { get; set; }
     }
 }

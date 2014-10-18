@@ -66,7 +66,9 @@ namespace SnooSharp
 					{"redirect_uri", _redirectUrl}, //this is basically just a magic string that needs to match with reddit's app registry
 				}));
 			var jsonResult = await result.Content.ReadAsStringAsync();
-			return JsonConvert.DeserializeObject<RedditOAuth>(jsonResult);
+			var oAuth = JsonConvert.DeserializeObject<RedditOAuth>(jsonResult);
+			oAuth.Created = DateTime.UtcNow;
+			return oAuth;
 		}
 
 		public async Task<RedditOAuth> RefreshToken(string refreshToken)
@@ -81,6 +83,7 @@ namespace SnooSharp
 				}));
 			var jsonResult = await result.Content.ReadAsStringAsync();
 			var oAuth = JsonConvert.DeserializeObject<RedditOAuth>(jsonResult);
+			oAuth.Created = DateTime.UtcNow;
 			oAuth.RefreshToken = refreshToken; //this is to make life a bit easier, since you would need to keep track of this thing anyway
 			return oAuth;
 		}
@@ -116,7 +119,7 @@ namespace SnooSharp
 
         private async Task EnsureRedditCookie()
         {
-            if (_userState.LoginCookie != null)
+            if (!string.IsNullOrWhiteSpace(_userState.LoginCookie))
             {
 				var redditUri = new Uri(RedditBaseUrl);
                 _cookieContainer.Add(redditUri, new Cookie("reddit_session", _userState.LoginCookie));
@@ -124,7 +127,7 @@ namespace SnooSharp
 			else if (_userState.OAuth != null)
 			{
 				//see if we need to refresh the token
-				if (_userState.OAuth.ExpiresIn > DateTime.UtcNow)
+				if (_userState.OAuth.Created.AddSeconds(_userState.OAuth.ExpiresIn) < DateTime.UtcNow)
 				{
 					_userState.OAuth = await RefreshToken(_userState.OAuth.RefreshToken);
 				}
@@ -152,6 +155,21 @@ namespace SnooSharp
             else
                 return null;
         }
+
+		//this one is seperated out so we can use it interally on initial user login
+		public async Task<Account> GetIdentity()
+		{
+			await ThrottleRequests();
+			await EnsureRedditCookie();
+			var meString = await _httpClient.GetStringAsync(RedditBaseUrl + "/api/v1/me");
+			if (!string.IsNullOrWhiteSpace(meString) && meString != "{}")
+			{
+				var thing = JsonConvert.DeserializeObject<Account>(meString);
+				return thing;
+			}
+			else
+				return null;
+		}
 
         public async Task<User> Login(string username, string password)
         {

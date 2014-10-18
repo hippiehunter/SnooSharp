@@ -14,9 +14,11 @@ namespace SnooSharp
 		public string AccessToken {get; set;}
 		[JsonProperty("token_type")]
 		public string TokenType { get; set; }
-		[JsonConverter(typeof(UnixTimeConverter))]
 		[JsonProperty("expires_in")]
-		public DateTime ExpiresIn { get; set; }
+		public int ExpiresIn { get; set; }
+		[JsonConverter(typeof(UnixTimeConverter))]
+		[JsonProperty("created")]
+		public DateTime Created { get; set; }
 		[JsonProperty("scope")]
 		public string Scope { get; set; }
 		[JsonProperty("refresh_token")]
