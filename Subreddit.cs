@@ -34,8 +34,8 @@ namespace SnooSharp
         [JsonProperty("display_name")]
         public string DisplayName { get; set; }
         [JsonProperty("over18")]
-        public bool Over18 { get; set; }
-        [JsonProperty("subscribers")]
+        public bool? Over18 { get; set; }
+        [JsonProperty("subscribers", NullValueHandling=NullValueHandling.Ignore)]
         public long Subscribers { get; set; }
         [JsonProperty("title")]
         public string Title { get; set; }
