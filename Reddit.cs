@@ -425,6 +425,12 @@ namespace SnooSharp
             Listing listing = null;
             await ThrottleRequests();
 			await EnsureRedditCookie();
+
+			if (url.StartsWith("http://") && url.Contains("reddit.com"))
+			{
+				url = RedditBaseUrl + url.Substring(url.IndexOf("reddit.com") + "reddit.com".Length);
+			}
+
             var json = await _httpClient.GetStringAsync(url);
             if (json.StartsWith("["))
             {
@@ -464,7 +470,7 @@ namespace SnooSharp
 
             if (permalink.Contains(".json?"))
             {
-                targetUri = "http://www.reddit.com" + permalink;
+				targetUri = RedditBaseUrl + permalink;
             }
             else if (permalink.Contains("?"))
             {
@@ -475,7 +481,7 @@ namespace SnooSharp
             {
                 targetUri = limit == -1 ?
                             string.Format("{1}{0}.json", permalink, RedditBaseUrl) :
-                            string.Format("{2}{0}.json?limit={1}", permalink, limit, RedditBaseUrl);
+							string.Format("{2}{0}.json?limit={1}", permalink, guardedLimit, RedditBaseUrl);
             }
 
             Listing listing = null;
