@@ -22,6 +22,10 @@ namespace SnooSharp
         public string BodyHtml { get; set; }
         [JsonProperty("link_id")]
         public string LinkId { get; set; }
+        [JsonProperty("link_url")]
+        public string LinkUrl { get; set; }
+        [JsonProperty("link_title")]
+        public string LinkTitle { get; set; }
         [JsonProperty("parent_id")]
         public string ParentId { get; set; }
         [JsonProperty("subreddit")]
@@ -46,5 +50,7 @@ namespace SnooSharp
         public bool? Likes { get; set; }
         [JsonProperty("gilded")]
         public int Gilded { get; set; }
+        [JsonProperty("context", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string Context { get; set; }
     }
 }
