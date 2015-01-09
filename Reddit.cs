@@ -614,6 +614,16 @@ namespace SnooSharp
             return ThingAction("report", thingId);
         }
 
+        public virtual Task HideThing(string thingId)
+        {
+            return ThingAction("hide", thingId);
+        }
+
+        public virtual Task UnHideThing(string thingId)
+        {
+            return ThingAction("unhide", thingId);
+        }
+
         public virtual async Task AddPost(string kind, string url, string text, string subreddit, string title)
         {
             var arguments = new Dictionary<string, string>
