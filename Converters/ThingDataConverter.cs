@@ -58,6 +58,9 @@ namespace SnooSharp.Converters
                                 case "LabeledMulti":
                                     targetThing.Data = new LabeledMulti();
                                     break;
+                                case "LabeledMultiDescription":
+                                    targetThing.Data = new LabeledMultiDescription();
+                                    break;
 								case null:
 									targetThing.Kind = "t5";
 									targetThing.Data = new Subreddit();

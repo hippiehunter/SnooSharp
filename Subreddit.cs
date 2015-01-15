@@ -62,5 +62,32 @@ namespace SnooSharp
     {
         [JsonProperty("path")]
         public string Path { get; set; }
+
+        [JsonProperty("visibility")]
+        public string Visibility { get; set; }
+
+        [JsonProperty("can_edit")]
+        public string CanEdit { get; set; }
+
+        [JsonConverter(typeof(UnixUTCTimeConverter))]
+        [JsonProperty("created")]
+        public DateTime Created { get; set; }
+
+        [JsonProperty("subreddits")]
+        public List<LabeledMultiSubredditItem> Subreddits { get; set; }
+    }
+
+    [DataContract]
+    public class LabeledMultiSubredditItem
+    {
+        [JsonProperty("name")]
+        public string Name { get; set; }
+    }
+
+    [DataContract]
+    public class LabeledMultiDescription : ThingData
+    {
+        [JsonProperty("body_md")]
+        public string BodyMD { get; set; }
     }
 }

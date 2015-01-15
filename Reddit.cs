@@ -275,6 +275,11 @@ namespace SnooSharp
                 return JsonConvert.DeserializeObject<Thing>(thingStr);
         }
 
+        public async Task DeleteMultireddit(string url)
+        {
+            await BasicDelete(new Dictionary<string, string> { { "uh", _userState.ModHash } }, RedditBaseUrl + "/api/multi/" + url);
+        }
+
         public virtual async Task<Listing> GetSubreddits(int? limit)
         {
             var maxLimit = _userState.IsGold ? 1500 : 100;
@@ -290,11 +295,9 @@ namespace SnooSharp
             else if (name == "all")
                 return new TypedThing<Subreddit>(new Thing { Kind = "t5", Data = new Subreddit { Headertitle = "all", Url = "/r/all", Name = "all", DisplayName="all", Title="all", Id="t5_fakeid" } });
 
-            string targetUri;
             if (!name.Contains("/m/"))
             {
-                targetUri = string.Format("/r/{0}/about.json", name, RedditBaseUrl);
-                var subreddit = await GetAuthedString(targetUri);
+                var subreddit = await GetAuthedString(string.Format("/r/{0}/about.json", name));
                 //error page
                 if (subreddit.ToLower().StartsWith("<!doctype html>"))
                 {
@@ -315,24 +318,27 @@ namespace SnooSharp
                    name = name.Replace("me/", "user/" + _userState.Username + "/");
                 }
 
-                targetUri = string.Format("/api/multi/{0}.json", name);
                 await ThrottleRequests();
 				await EnsureRedditCookie();
-                var subreddit = await GetAuthedString(targetUri);
+                var description = await GetAuthedString(string.Format("/api/multi/{0}/description", name));
+                await ThrottleRequests();
+                var labeledMulti = await GetAuthedString(string.Format("/api/multi/{0}/", name));
                 //error page
-                if (subreddit.ToLower().StartsWith("<!doctype html>"))
+                if (description.ToLower().Contains("\"reason\": \"MULTI_NOT_FOUND\"") ||
+                    labeledMulti.ToLower().Contains("\"reason\": \"MULTI_NOT_FOUND\""))
                 {
                     throw new RedditNotFoundException(name);
                 }
                 else
                 {
-                    var labeledMulti = new TypedThing<LabeledMulti>(JsonConvert.DeserializeObject<Thing>(subreddit));
-                    var multiPath = labeledMulti.Data.Path;
+                    var typedMulti = new TypedThing<LabeledMulti>(JsonConvert.DeserializeObject<Thing>(labeledMulti));
+                    var typedMultiDescription = new TypedThing<LabeledMultiDescription>(JsonConvert.DeserializeObject<Thing>(labeledMulti));
+                    var multiPath = typedMulti.Data.Path;
 
                     if (!string.IsNullOrWhiteSpace(_userState.Username))
                         multiPath = multiPath.Replace("/user/" + _userState.Username, "/me");
 
-                    return new TypedThing<Subreddit>(new Thing { Kind = "t5", Data = new Subreddit { DisplayName = labeledMulti.Data.Name, Title = labeledMulti.Data.Name, Url = multiPath, Headertitle = labeledMulti.Data.Name, Over18 = false } });
+                    return new TypedThing<Subreddit>(new Thing { Kind = "t5", Data = new Subreddit { Description = typedMultiDescription.TypedData.BodyMD, DisplayName = typedMulti.Data.Name, Title = typedMulti.Data.Name, Url = multiPath, Headertitle = typedMulti.Data.Name, Over18 = false } });
                 }
             }
         }
@@ -760,6 +766,7 @@ namespace SnooSharp
         private async Task BasicPost(Dictionary<string, string> arguments, string url)
         {
             await ThrottleRequests();
+            await EnsureRedditCookie();
             HttpResponseMessage responseMessage = null;
             try
             {
@@ -776,6 +783,32 @@ namespace SnooSharp
                 else
                     throw;
                 
+            }
+            await ProcessJsonErrors(responseMessage);
+        }
+
+        private async Task BasicDelete(Dictionary<string, string> arguments, string url)
+        {
+            await ThrottleRequests();
+            await EnsureRedditCookie();
+            HttpResponseMessage responseMessage = null;
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Delete, url);
+                request.Content = new FormUrlEncodedContent(arguments);
+                responseMessage = await _httpClient.SendAsync(request);
+            }
+            catch (WebException ex)
+            {
+                //connection problems during a post, so put it into the deferalSink
+                if (ex.Status == WebExceptionStatus.ConnectFailure || ex.Status == WebExceptionStatus.SendFailure)
+                {
+                    _deferalSink.Defer(arguments, url);
+                    return;
+                }
+                else
+                    throw;
+
             }
             await ProcessJsonErrors(responseMessage);
         }
