@@ -186,6 +186,22 @@ namespace SnooSharp
             }
         }
 
+        private string MakePlainSubredditName(string subreddit)
+        {
+            var cleanSubreddit = subreddit;
+            if (cleanSubreddit.Contains("/r/"))
+            {
+                var startOfSubredditName = cleanSubreddit.IndexOf("/r/") + 3;
+                var endOfSubredditName = cleanSubreddit.IndexOf('/', startOfSubredditName);
+                if (endOfSubredditName != -1)
+                    cleanSubreddit = cleanSubreddit.Substring(startOfSubredditName, endOfSubredditName - startOfSubredditName);
+                else
+                    cleanSubreddit = cleanSubreddit.Substring(startOfSubredditName);
+            }
+            return cleanSubreddit;
+            
+        }
+
         private async Task<T> GetAuthedJson<T>(string url)
         {
             return await Task.Run(async () => JsonConvert.DeserializeObject<T>(await GetAuthedString(url)));
@@ -257,8 +273,8 @@ namespace SnooSharp
             }
             else
             {
-                targetUri = string.Format("/r/{2}/search.json?limit={0}&q={1}&restrict_sr=on", guardedLimit, query, restrictedToSubreddit);
-				afterUri = string.Format("/subreddits/r/{1}/search.json?q={0}&restrict_sr=on", query, restrictedToSubreddit);
+                targetUri = string.Format("/r/{2}/search.json?limit={0}&q={1}&restrict_sr=on", guardedLimit, query, MakePlainSubredditName(restrictedToSubreddit));
+				afterUri = string.Format("/subreddits/r/{1}/search.json?q={0}&restrict_sr=on", query, MakePlainSubredditName(restrictedToSubreddit));
             }
             var newListing = await GetAuthedJson<Listing>(targetUri);
             return Tuple.Create(afterUri, await _listingFilter.Filter(newListing));
@@ -625,7 +641,7 @@ namespace SnooSharp
         {
             var content = new Dictionary<string, string>
             {
-                { "sr", subreddit},
+                { "sr", MakePlainSubredditName(subreddit)},
                 { "uh", _userState.ModHash},
                 { "action", unsub ? "unsub" : "sub"}
             };
@@ -662,7 +678,7 @@ namespace SnooSharp
                 {"url", url},
                 {"text", text},
                 {"title", title},
-                {"sr", subreddit},
+                {"sr", MakePlainSubredditName(subreddit)},
                 {"renderstyle", "html" },
                 {"uh", _userState.ModHash}
             };
