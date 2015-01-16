@@ -145,6 +145,11 @@ namespace SnooSharp
 
         private async Task<string> GetAuthedString(string url)
         {
+            return await Task.Run(() => GetAuthedStringInner(url));
+        }
+
+        private async Task<string> GetAuthedStringInner(string url)
+        {
             await ThrottleRequests();
             await EnsureRedditCookie();
             var responseMessage = await _httpClient.GetAsync(RedditBaseUrl + url);
@@ -183,8 +188,7 @@ namespace SnooSharp
 
         private async Task<T> GetAuthedJson<T>(string url)
         {
-            var bodyString = await GetAuthedString(url);
-            return await Task.Run(() => JsonConvert.DeserializeObject<T>(bodyString));
+            return await Task.Run(async () => JsonConvert.DeserializeObject<T>(await GetAuthedString(url)));
         }
 
         //this one is seperated out so we can use it interally on initial user login
@@ -933,7 +937,7 @@ namespace SnooSharp
         {
 			var maxLimit = 25;
 
-			var targetUri = string.Format("{1}/subreddits/popular.json?limit={0}", maxLimit, RedditBaseUrl);
+			var targetUri = string.Format("/subreddits/popular.json?limit={0}", maxLimit);
 			var subreddits = await GetAuthedString(targetUri);
 
 			if (subreddits == "\"{}\"")
