@@ -173,6 +173,7 @@ namespace SnooSharp
                     case HttpStatusCode.BadGateway:
                     case HttpStatusCode.BadRequest:
                     case HttpStatusCode.InternalServerError:
+                    case HttpStatusCode.ServiceUnavailable:
                         {
                             if (_failedRequestCount < 5)
                             {
