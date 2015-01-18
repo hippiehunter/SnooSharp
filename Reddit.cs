@@ -301,24 +301,37 @@ namespace SnooSharp
             await BasicDelete(new Dictionary<string, string> { { "uh", _userState.ModHash } }, RedditBaseUrl + "/api/multi/" + url);
         }
 
-        public virtual async Task<Listing> GetSubreddits(int? limit)
+        //known options at creation are where={new,popular}
+        public virtual async Task<Listing> GetSubreddits(int? limit, string where = null)
         {
-            var maxLimit = _userState.IsGold ? 1500 : 100;
-            var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
-            return await _listingFilter.Filter(await GetAuthedJson<Listing>("/reddits/.json?limit=" + guardedLimit));
+            var guardedLimit = Math.Min(100, limit ?? 100);
+            if(string.IsNullOrWhiteSpace(where))
+                return await _listingFilter.Filter(await GetAuthedJson<Listing>("/reddits/.json?limit=" + guardedLimit));
+            else
+                return await _listingFilter.Filter(await GetAuthedJson<Listing>(string.Format("/subreddits/{0}.json?limit={1}", where, guardedLimit)));
         }
 
-        public async Task<TypedThing<Subreddit>> GetSubreddit(string name)
+        public async Task<TypedThing<Subreddit>> GetSubredditAbout(string name)
+        {
+            return JsonConvert.DeserializeObject<TypedThing<Subreddit>>(await GetSubredditImpl(name, null));
+        }
+
+        public async Task<Listing> GetSubredditAbout(string name, string where)
+        {
+            return JsonConvert.DeserializeObject<Listing>(await GetSubredditImpl(name, where));
+        }
+
+        private async Task<string> GetSubredditImpl(string name, string where)
         {
             //no info for the front page
             if (name == "/")
-                return new TypedThing<Subreddit>(new Thing { Kind = "t5", Data = new Subreddit { Headertitle = name } });
+                return JsonConvert.SerializeObject(new TypedThing<Subreddit>(new Thing { Kind = "t5", Data = new Subreddit { Headertitle = name } }));
             else if (name == "all")
-                return new TypedThing<Subreddit>(new Thing { Kind = "t5", Data = new Subreddit { Headertitle = "all", Url = "/r/all", Name = "all", DisplayName="all", Title="all", Id="t5_fakeid" } });
+                return JsonConvert.SerializeObject(new TypedThing<Subreddit>(new Thing { Kind = "t5", Data = new Subreddit { Headertitle = "all", Url = "/r/all", Name = "all", DisplayName="all", Title="all", Id="t5_fakeid" } }));
 
             if (!name.Contains("/m/"))
             {
-                var subreddit = await GetAuthedString(string.Format("/r/{0}/about.json", name));
+                var subreddit = await GetAuthedString(string.Format("/r/{0}/about/{1}.json", name, where ?? ""));
                 //error page
                 if (subreddit.ToLower().StartsWith("<!doctype html>"))
                 {
@@ -326,7 +339,7 @@ namespace SnooSharp
                 }
                 else
                 {
-                    return new TypedThing<Subreddit>(JsonConvert.DeserializeObject<Thing>(subreddit));
+                    return subreddit;
                 }
             }
             else
@@ -359,7 +372,7 @@ namespace SnooSharp
                     if (!string.IsNullOrWhiteSpace(_userState.Username))
                         multiPath = multiPath.Replace("/user/" + _userState.Username, "/me");
 
-                    return new TypedThing<Subreddit>(new Thing { Kind = "t5", Data = new Subreddit { Description = typedMultiDescription.TypedData.BodyMD, DisplayName = typedMulti.Data.Name, Title = typedMulti.Data.Name, Url = multiPath, Headertitle = typedMulti.Data.Name, Over18 = false } });
+                    return JsonConvert.SerializeObject(new TypedThing<Subreddit>(new Thing { Kind = "t5", Data = new Subreddit { Description = typedMultiDescription.TypedData.BodyMD, DisplayName = typedMulti.Data.Name, Title = typedMulti.Data.Name, Url = multiPath, Headertitle = typedMulti.Data.Name, Over18 = false } }));
                 }
             }
         }
@@ -380,8 +393,7 @@ namespace SnooSharp
 
         public async Task<Listing> GetPostsBySubreddit(string subreddit, string sort = "hot", int? limit = null)
         {
-            var maxLimit = _userState.IsGold ? 1500 : 100;
-            var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
+            var guardedLimit = Math.Min(100, limit ?? 100);
 
             if (subreddit == null)
             {
@@ -940,27 +952,24 @@ namespace SnooSharp
 
         public async Task<Listing> GetSubscribedSubredditListing()
         {
-            var maxLimit = _userState.IsGold ? 1500 : 100;
-            var targetUri = string.Format("/reddits/mine.json?limit={0}", maxLimit);
+            var targetUri = "/reddits/mine.json?limit=100";
             try
             {
                 return await GetAuthedJson<Listing>(targetUri);
             }
             catch { }
-            return await GetDefaultSubreddits();
+            return await GetSubreddits(25);
         }
 
-        public async Task<Listing> GetDefaultSubreddits()
+        public async Task<Listing> GetRecomendedSubreddits(IEnumerable<string> inputSubreddits)
         {
-			var maxLimit = 25;
+            var targetUri = "/api/recommend/sr/" + string.Join(",", inputSubreddits.Select(MakePlainSubredditName));
+            var subreddits = await GetAuthedString(targetUri);
 
-			var targetUri = string.Format("/subreddits/popular.json?limit={0}", maxLimit);
-			var subreddits = await GetAuthedString(targetUri);
-
-			if (subreddits == "\"{}\"")
-				return new Listing { Data = new ListingData { Children = new List<Thing> { new Thing { Kind = "t3", Data = new Subreddit { Headertitle = "/", Name = "/" } } } } };
-			else
-				return await Task.Run(() => JsonConvert.DeserializeObject<Listing>(subreddits));
+            if (subreddits == "\"{}\"")
+                return new Listing { Data = new ListingData { Children = new List<Thing> { new Thing { Kind = "t3", Data = new Subreddit { Headertitle = "/", Name = "/" } } } } };
+            else
+                return await Task.Run(() => JsonConvert.DeserializeObject<Listing>(subreddits));
         }
 
 
@@ -974,26 +983,37 @@ namespace SnooSharp
 
         public async Task<Listing> GetSaved(int? limit)
         {
-            return await GetUserInfoListing("saved", limit);
+            return await GetUserInfoListing(_userState.Username, "saved", limit);
         }
 
         public async Task<Listing> GetLiked(int? limit)
         {
-            return await GetUserInfoListing("liked", limit);
+            return await GetUserInfoListing(_userState.Username, "liked", limit);
         }
 
-        private async Task<Listing> GetUserInfoListing(string kind, int? limit)
+        private async Task<Listing> GetUserInfoListing(string username, string kind, int? limit)
         {
-            var maxLimit = _userState.IsGold ? 1500 : 100;
-            var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
-
-            var targetUri = string.Format("/user/{0}/{2}/.json?limit={1}", _userState.Username, guardedLimit, kind);
+            var guardedLimit = Math.Min(100, limit ?? 100);
+            var targetUri = string.Format("/user/{0}/{2}/.json?limit={1}", username, guardedLimit, kind);
             return await _listingFilter.Filter(await GetAuthedJson<Listing>(targetUri));
+        }
+
+        public async Task<Listing> GetUserTrophies(string username, int? limit)
+        {
+            var targetUri = string.Format("/api/v1/user/{0}/trophies?limit={1}", username, Math.Min(100, limit ?? 100));
+            return await GetAuthedJson<Listing>(targetUri);
+        }
+
+        public async Task<Thing> GetUserInfo(string username, string kind, int? limit)
+        {
+            var guardedLimit = Math.Min(100, limit ?? 100);
+            var targetUri = string.Format("/user/{0}/{2}/.json", username, kind);
+            return await GetAuthedJson<Thing>(targetUri);
         }
 
         public async Task<Listing> GetDisliked(int? limit)
         {
-            return await GetUserInfoListing("disliked", limit);
+            return await GetUserInfoListing(_userState.Username, "disliked", limit);
         }
 
         public Task<Listing> GetSentMessages(int? limit)
@@ -1036,8 +1056,7 @@ namespace SnooSharp
 
         public async Task<Listing> GetModActions(string subreddit, int? limit)
         {
-            var maxLimit = _userState.IsGold ? 1500 : 100;
-            var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
+            var guardedLimit = Math.Min(100, limit ?? 100);
 
             var targetUri = string.Format("/r/{0}/about/log.json?limit={1}", subreddit, guardedLimit);
 
@@ -1051,8 +1070,7 @@ namespace SnooSharp
 
         private async Task<Listing> GetMail(string kind, int? limit)
         {
-            var maxLimit = _userState.IsGold ? 1500 : 100;
-            var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
+            var guardedLimit = Math.Min(100, limit ?? 100);
 
 			var targetUri = string.Format(RedditBaseUrl + MailBaseUrlFormat + ".json?limit={1}", kind, guardedLimit);
 
