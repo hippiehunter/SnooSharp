@@ -36,5 +36,7 @@ namespace SnooSharp
         public int LinkKarma { get; set; }
         [JsonProperty("modhash")]
         public string ModHash { get; set; }
+        [JsonProperty("is_friend", NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool IsFriend { get; set; }
     }
 }

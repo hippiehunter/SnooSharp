@@ -1007,7 +1007,7 @@ namespace SnooSharp
         public async Task<Thing> GetUserInfo(string username, string kind, int? limit)
         {
             var guardedLimit = Math.Min(100, limit ?? 100);
-            var targetUri = string.Format("/user/{0}/{2}/.json", username, kind);
+            var targetUri = string.Format("/user/{0}/{1}/.json", username, kind);
             return await GetAuthedJson<Thing>(targetUri);
         }
 
