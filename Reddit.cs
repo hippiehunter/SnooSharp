@@ -714,7 +714,7 @@ namespace SnooSharp
 
         private string CaptchaIden { get; set; }
         private string Captcha { get; set; }
-        private async Task PostCaptchable(Dictionary<string, string> urlEncodedData, string uri)
+        private async Task<string> PostCaptchable(Dictionary<string, string> urlEncodedData, string uri)
         {
             if (!urlEncodedData.ContainsKey("api_type"))
                 urlEncodedData.Add("api_type", "json");
@@ -738,13 +738,14 @@ namespace SnooSharp
 
 			await EnsureRedditCookie();
             HttpResponseMessage response = null;
-
+            string responseString = null;
             do
             {
                 try
                 {
                     await ThrottleRequests();
                     response = await _httpClient.PostAsync(uri, new FormUrlEncodedContent(urlEncodedData));
+                    responseString = await response.Content.ReadAsStringAsync();
                 }
                 catch(WebException ex)
                 {
@@ -752,18 +753,18 @@ namespace SnooSharp
                     if (ex.Status == WebExceptionStatus.ConnectFailure || ex.Status == WebExceptionStatus.SendFailure)
                     {
                         _deferalSink.Defer(urlEncodedData, uri);
-                        return;
+                        return null;
                     }
                     else
                         throw;
                 
                 }
-            }while(response != null && await HandleCaptchaError(response));
+            }while(response != null && await HandleCaptchaError(responseString));
+            return responseString;
         }
 
-        private async Task<bool> HandleCaptchaError(HttpResponseMessage response)
+        private async Task<bool> HandleCaptchaError(string json)
         {
-            var json = await response.Content.ReadAsStringAsync();
             var jsonObject = JsonConvert.DeserializeObject(json) as JObject;
             JToken captcha = null;
             JToken errors = null;
@@ -889,7 +890,7 @@ namespace SnooSharp
 			await PostCaptchable(arguments, RedditBaseUrl + "/api/compose");
         }
 
-        public virtual async Task AddComment(string parentId, string content)
+        public virtual async Task<String> AddComment(string parentId, string content)
         {
             var arguments = new Dictionary<string, string>
             {
@@ -898,7 +899,14 @@ namespace SnooSharp
                 {"uh", _userState.ModHash}
             };
 
-			await PostCaptchable(arguments, RedditBaseUrl + "/api/comment");
+			var responseString = await PostCaptchable(arguments, RedditBaseUrl + "/api/comment");
+            if (responseString != null)
+            {
+                var responseObject = JsonConvert.DeserializeAnonymousType(responseString, new { json = new { data = new { things = new List<Thing>() } } });
+                return ((Comment)responseObject.json.data.things.First().Data).Id;
+            }
+            else
+                return null;
         }
 
         public virtual async Task EditComment(string thingId, string text)
