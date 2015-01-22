@@ -316,9 +316,9 @@ namespace SnooSharp
             return JsonConvert.DeserializeObject<TypedThing<Subreddit>>(await GetSubredditImpl(name, null));
         }
 
-        public async Task<Listing> GetSubredditAbout(string name, string where)
+        public async Task<UserListing> GetSubredditAbout(string name, string where)
         {
-            return JsonConvert.DeserializeObject<Listing>(await GetSubredditImpl(name, where));
+            return JsonConvert.DeserializeObject<UserListing>(await GetSubredditImpl(name, where));
         }
 
         private async Task<string> GetSubredditImpl(string name, string where)
@@ -331,7 +331,7 @@ namespace SnooSharp
 
             if (!name.Contains("/m/"))
             {
-                var subreddit = await GetAuthedString(string.Format("/r/{0}/about/{1}.json", name, where ?? ""));
+                var subreddit = await GetAuthedString(string.Format("/r/{0}/about/{1}.json", MakePlainSubredditName(name), where ?? ""));
                 //error page
                 if (subreddit.ToLower().StartsWith("<!doctype html>"))
                 {
@@ -965,19 +965,17 @@ namespace SnooSharp
             {
                 return await GetAuthedJson<Listing>(targetUri);
             }
-            catch { }
-            return await GetSubreddits(25);
+            catch 
+            {
+                return new Listing { Data = new ListingData { Children = new List<Thing>() } };
+            }
         }
 
-        public async Task<Listing> GetRecomendedSubreddits(IEnumerable<string> inputSubreddits)
+        public async Task<List<Recommendation>> GetRecomendedSubreddits(IEnumerable<string> inputSubreddits)
         {
             var targetUri = "/api/recommend/sr/" + string.Join(",", inputSubreddits.Select(MakePlainSubredditName));
             var subreddits = await GetAuthedString(targetUri);
-
-            if (subreddits == "\"{}\"")
-                return new Listing { Data = new ListingData { Children = new List<Thing> { new Thing { Kind = "t3", Data = new Subreddit { Headertitle = "/", Name = "/" } } } } };
-            else
-                return await Task.Run(() => JsonConvert.DeserializeObject<Listing>(subreddits));
+            return await Task.Run(() => JsonConvert.DeserializeObject<List<Recommendation>>(subreddits));
         }
 
 

@@ -37,6 +37,8 @@ namespace SnooSharp
         public bool? Over18 { get; set; }
         [JsonProperty("subscribers", NullValueHandling=NullValueHandling.Ignore)]
         public long Subscribers { get; set; }
+        [JsonProperty("user_is_subscriber", NullValueHandling = NullValueHandling.Ignore)]
+        public bool Subscribed { get; set; }
         [JsonProperty("title")]
         public string Title { get; set; }
         [JsonProperty("url")]
