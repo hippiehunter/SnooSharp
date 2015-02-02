@@ -143,9 +143,9 @@ namespace SnooSharp
 
         private int _failedRequestCount = 0;
 
-        private async Task<string> GetAuthedString(string url)
+        private Task<string> GetAuthedString(string url)
         {
-            return await Task.Run(() => GetAuthedStringInner(url));
+            return GetAuthedStringInner(url);
         }
 
         private async Task<string> GetAuthedStringInner(string url)
