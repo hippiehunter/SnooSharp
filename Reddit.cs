@@ -145,7 +145,7 @@ namespace SnooSharp
 
         private Task<string> GetAuthedString(string url)
         {
-            return GetAuthedStringInner(url);
+            return Task.Run(() => GetAuthedStringInner(url));
         }
 
         private async Task<string> GetAuthedStringInner(string url)
