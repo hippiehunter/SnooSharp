@@ -331,7 +331,7 @@ namespace SnooSharp
 
             if (!name.Contains("/m/"))
             {
-                var subreddit = await GetAuthedString(string.Format("/r/{0}/about/{1}.json", MakePlainSubredditName(name), where ?? ""));
+                var subreddit = await GetAuthedString(string.Format("/r/{0}/about{1}.json", MakePlainSubredditName(name), where != null ? "/" + where : ""));
                 //error page
                 if (subreddit.ToLower().StartsWith("<!doctype html>"))
                 {
@@ -650,11 +650,11 @@ namespace SnooSharp
 			await BasicPost(arguments, RedditBaseUrl + "/api/vote");
         }
 
-        public virtual async Task AddSubredditSubscription(string subreddit, bool unsub)
+        public virtual async Task AddSubredditSubscription(string subredditId, bool unsub)
         {
             var content = new Dictionary<string, string>
             {
-                { "sr", MakePlainSubredditName(subreddit)},
+                { "sr", subredditId},
                 { "uh", _userState.ModHash},
                 { "action", unsub ? "unsub" : "sub"}
             };
