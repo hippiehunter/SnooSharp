@@ -502,58 +502,61 @@ namespace SnooSharp
 
         public async Task<Listing> GetCommentsOnPost(string subreddit, string permalink, int? limit)
         {
-            var maxLimit = _userState.IsGold ? 1500 : 500;
-            var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
+            return await Task.Run(async () => 
+            {
+                var maxLimit = _userState.IsGold ? 1500 : 500;
+                var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
 
-            string targetUri = null;
+                string targetUri = null;
 
-            if (permalink.Contains("reddit.com"))
-            {
-                permalink = permalink.Substring(permalink.IndexOf("reddit.com") + "reddit.com".Length);
-            }
-
-            if (permalink.Contains(".json?"))
-            {
-				targetUri = permalink;
-            }
-            else if (permalink.Contains("?"))
-            {
-                var queryPos = permalink.IndexOf("?");
-                targetUri = string.Format("{0}.json{1}", permalink.Remove(queryPos), permalink.Substring(queryPos));
-            }
-            else
-            {
-                targetUri = limit == -1 ?
-                            string.Format("{0}.json", permalink) :
-							string.Format("{0}.json?limit={1}", permalink, guardedLimit);
-            }
-
-            Listing listing = null;
-            var comments = await GetAuthedString(targetUri);
-            if (comments.StartsWith("["))
-            {
-                var listings = JsonConvert.DeserializeObject<Listing[]>(comments);
-                listing = new Listing { Data = new ListingData { Children = new List<Thing>() } };
-                foreach (var combinableListing in listings)
+                if (permalink.Contains("reddit.com"))
                 {
-                    listing.Data.Children.AddRange(combinableListing.Data.Children);
-                    listing.Kind = combinableListing.Kind;
-                    listing.Data.After = combinableListing.Data.After;
-                    listing.Data.Before = combinableListing.Data.Before;
+                    permalink = permalink.Substring(permalink.IndexOf("reddit.com") + "reddit.com".Length);
                 }
-            }
-            else
-                listing = JsonConvert.DeserializeObject<Listing>(comments);
 
-            var requestedLinkInfo = listing.Data.Children.FirstOrDefault(thing => thing.Data is Link);
-            if (requestedLinkInfo != null)
-            {
-                if (!_linkToOpMap.ContainsKey(((Link)requestedLinkInfo.Data).Name))
+                if (permalink.Contains(".json?"))
                 {
-                    _linkToOpMap.Add(((Link)requestedLinkInfo.Data).Name, ((Link)requestedLinkInfo.Data).Author);
+				    targetUri = permalink;
                 }
-            }
-            return listing;
+                else if (permalink.Contains("?"))
+                {
+                    var queryPos = permalink.IndexOf("?");
+                    targetUri = string.Format("{0}.json{1}", permalink.Remove(queryPos), permalink.Substring(queryPos));
+                }
+                else
+                {
+                    targetUri = limit == -1 ?
+                                string.Format("{0}.json", permalink) :
+							    string.Format("{0}.json?limit={1}", permalink, guardedLimit);
+                }
+
+                Listing listing = null;
+                var comments = await GetAuthedString(targetUri);
+                if (comments.StartsWith("["))
+                {
+                    var listings = JsonConvert.DeserializeObject<Listing[]>(comments);
+                    listing = new Listing { Data = new ListingData { Children = new List<Thing>() } };
+                    foreach (var combinableListing in listings)
+                    {
+                        listing.Data.Children.AddRange(combinableListing.Data.Children);
+                        listing.Kind = combinableListing.Kind;
+                        listing.Data.After = combinableListing.Data.After;
+                        listing.Data.Before = combinableListing.Data.Before;
+                    }
+                }
+                else
+                    listing = JsonConvert.DeserializeObject<Listing>(comments);
+
+                var requestedLinkInfo = listing.Data.Children.FirstOrDefault(thing => thing.Data is Link);
+                if (requestedLinkInfo != null)
+                {
+                    if (!_linkToOpMap.ContainsKey(((Link)requestedLinkInfo.Data).Name))
+                    {
+                        _linkToOpMap.Add(((Link)requestedLinkInfo.Data).Name, ((Link)requestedLinkInfo.Data).Author);
+                    }
+                }
+                return listing;
+            });
         }
 
         public Task<Listing> GetMessages(int? limit)
