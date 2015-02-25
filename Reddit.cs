@@ -187,7 +187,7 @@ namespace SnooSharp
             }
         }
 
-        private string MakePlainSubredditName(string subreddit)
+        public static string MakePlainSubredditName(string subreddit)
         {
             var cleanSubreddit = subreddit;
             if (cleanSubreddit.Contains("/r/"))

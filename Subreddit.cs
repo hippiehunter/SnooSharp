@@ -39,6 +39,8 @@ namespace SnooSharp
         public long Subscribers { get; set; }
         [JsonProperty("user_is_subscriber", NullValueHandling = NullValueHandling.Ignore)]
         public bool Subscribed { get; set; }
+        [JsonProperty("user_is_moderator", NullValueHandling = NullValueHandling.Ignore)]
+        public bool Moderator { get; set; }
         [JsonProperty("title")]
         public string Title { get; set; }
         [JsonProperty("url")]
