@@ -181,6 +181,10 @@ namespace SnooSharp
                             }
                             break;
                         }
+                    case HttpStatusCode.NotFound:
+                        throw new RedditNotFoundException(url);
+                    case HttpStatusCode.Forbidden:
+                        throw new RedditException(url + " forbidden");
                 }
                 responseMessage.EnsureSuccessStatusCode();
                 return null;
