@@ -504,7 +504,7 @@ namespace SnooSharp
                 return null;
         }
 
-        public async Task<Listing> GetCommentsOnPost(string subreddit, string permalink, int? limit)
+        public async Task<Listing> GetCommentsOnPost(string subreddit, string permalink, int? limit, string context = null, string sort = null )
         {
             return await Task.Run(async () => 
             {
@@ -533,6 +533,25 @@ namespace SnooSharp
                                 string.Format("{0}.json", permalink) :
 							    string.Format("{0}.json?limit={1}", permalink, guardedLimit);
                 }
+
+                if (context != null || sort != null)
+                {
+                    var parameters = new List<string>();
+                    if (context != null)
+                        parameters.Add("context=" + context);
+                    if (sort != null)
+                        parameters.Add("sort=" + sort);
+
+                    if (targetUri.Contains("?"))
+                    {
+                        targetUri += "&" + string.Join("&", parameters);
+                    }
+                    else
+                    {
+                        targetUri += "?" + string.Join("&", parameters);
+                    }
+                }
+                
 
                 Listing listing = null;
                 var comments = await GetAuthedString(targetUri);
