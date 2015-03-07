@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace SnooSharp
@@ -54,7 +55,7 @@ namespace SnooSharp
 			}
 		}
 
-		public async Task<RedditOAuth> RequestGrantCode(string code)
+		public async Task<RedditOAuth> RequestGrantCode(string code, CancellationToken token)
 		{
 			//we're messing with the headers here so use a different client
 			var httpClient = new HttpClient();
@@ -64,14 +65,14 @@ namespace SnooSharp
 					{"grant_type", "authorization_code"},
 					{"code", code},
 					{"redirect_uri", _redirectUrl}, //this is basically just a magic string that needs to match with reddit's app registry
-				}));
+				}), token);
 			var jsonResult = await result.Content.ReadAsStringAsync();
 			var oAuth = JsonConvert.DeserializeObject<RedditOAuth>(jsonResult);
 			oAuth.Created = DateTime.UtcNow;
 			return oAuth;
 		}
 
-		public async Task<RedditOAuth> RefreshToken(string refreshToken)
+		public async Task<RedditOAuth> RefreshToken(string refreshToken, CancellationToken token)
 		{
 			//we're messing with the headers here so use a different client
 			var httpClient = new HttpClient();
@@ -80,7 +81,7 @@ namespace SnooSharp
 				{
 					{"grant_type", "refresh_token"},
 					{"refresh_token", refreshToken},
-				}));
+				}), token);
 			var jsonResult = await result.Content.ReadAsStringAsync();
 			var oAuth = JsonConvert.DeserializeObject<RedditOAuth>(jsonResult);
 			oAuth.Created = DateTime.UtcNow;
@@ -117,7 +118,7 @@ namespace SnooSharp
             }
         }
 
-        private async Task EnsureRedditCookie()
+        private async Task EnsureRedditCookie(CancellationToken token)
         {
             if (!string.IsNullOrWhiteSpace(_userState.LoginCookie))
             {
@@ -129,7 +130,7 @@ namespace SnooSharp
 				//see if we need to refresh the token
 				if (_userState.OAuth.Created.AddSeconds(_userState.OAuth.ExpiresIn) < DateTime.UtcNow)
 				{
-					_userState.OAuth = await RefreshToken(_userState.OAuth.RefreshToken);
+					_userState.OAuth = await RefreshToken(_userState.OAuth.RefreshToken, token);
 				}
 
 				_httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _userState.OAuth.AccessToken);
@@ -143,19 +144,19 @@ namespace SnooSharp
 
         private int _failedRequestCount = 0;
 
-        private Task<string> GetAuthedString(string url)
+        private Task<string> GetAuthedString(string url, CancellationToken token)
         {
-            return Task.Run(() => GetAuthedStringInner(url));
+            return Task.Run(() => GetAuthedStringInner(url, token), token);
         }
 
-        private async Task<string> GetAuthedStringInner(string url)
+        private async Task<string> GetAuthedStringInner(string url, CancellationToken token)
         {
-            await ThrottleRequests();
-            await EnsureRedditCookie();
-            var responseMessage = await _httpClient.GetAsync(RedditBaseUrl + url);
+            await ThrottleRequests(token);
+            await EnsureRedditCookie(token);
+            var responseMessage = await _httpClient.GetAsync(RedditBaseUrl + url, HttpCompletionOption.ResponseContentRead, token);
             var bodyString = ProcessJsonErrors(await responseMessage.Content.ReadAsStringAsync());
             if (bodyString.StartsWith("<!doctype html><html><title>") && bodyString.EndsWith("try again and hopefully we will be fast enough this time."))
-                return await GetAuthedString(url);
+                return await GetAuthedString(url, token);
             else if (responseMessage.IsSuccessStatusCode)
             {
                 if (string.IsNullOrWhiteSpace(bodyString) || bodyString == "{}" || bodyString == "\"{}\"")
@@ -177,7 +178,7 @@ namespace SnooSharp
                         {
                             if (_failedRequestCount < 5)
                             {
-                                return await GetAuthedString(url);
+                                return await GetAuthedString(url, token);
                             }
                             break;
                         }
@@ -207,22 +208,22 @@ namespace SnooSharp
             
         }
 
-        private async Task<T> GetAuthedJson<T>(string url)
+        private async Task<T> GetAuthedJson<T>(string url, CancellationToken token)
         {
-            return await Task.Run(async () => JsonConvert.DeserializeObject<T>(await GetAuthedString(url)));
+            return await Task.Run(async () => JsonConvert.DeserializeObject<T>(await GetAuthedString(url, token)));
         }
 
         //this one is seperated out so we can use it interally on initial user login
         public async Task<Account> GetMe(string loginCookie)
         {
-            var thing = await GetAuthedJson<Thing>("/api/me.json");
+            var thing = await GetAuthedJson<Thing>("/api/me.json", CancellationToken.None);
             return thing == null ? null : (new TypedThing<Account>(thing)).Data;
         }
 
 		//this one is seperated out so we can use it interally on initial user login
 		public async Task<Account> GetIdentity()
 		{
-            return await GetAuthedJson<Account>("/api/v1/me");
+            return await GetAuthedJson<Account>("/api/v1/me", CancellationToken.None);
 		}
 
         public async Task<User> Login(string username, string password)
@@ -235,7 +236,7 @@ namespace SnooSharp
                 new KeyValuePair<string, string>("passwd", password)
             });
 
-            await ThrottleRequests();
+            await ThrottleRequests(CancellationToken.None);
             var loginResult = await _httpClient.PostAsync(loginUri, content);
 
 
@@ -259,7 +260,12 @@ namespace SnooSharp
                 throw new RedditException(loginResult.StatusCode.ToString());
         }
 
-        public async Task<Tuple<string, Listing>> Search(string query, int? limit, bool reddits, string restrictedToSubreddit)
+        public Task<Tuple<string, Listing>> Search(string query, int? limit, bool reddits, string restrictedToSubreddit)
+        {
+            return Search(query, limit, reddits, restrictedToSubreddit, CancellationToken.None);
+        }
+
+        public async Task<Tuple<string, Listing>> Search(string query, int? limit, bool reddits, string restrictedToSubreddit, CancellationToken token)
         {
             var maxLimit = _userState.IsGold ? 1500 : 100;
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
@@ -281,16 +287,21 @@ namespace SnooSharp
                 targetUri = string.Format("/r/{2}/search.json?limit={0}&q={1}&restrict_sr=on", guardedLimit, query, MakePlainSubredditName(restrictedToSubreddit));
 				afterUri = string.Format("/subreddits/r/{1}/search.json?q={0}&restrict_sr=on", query, MakePlainSubredditName(restrictedToSubreddit));
             }
-            var newListing = await GetAuthedJson<Listing>(targetUri);
+            var newListing = await GetAuthedJson<Listing>(targetUri,token);
             return Tuple.Create(afterUri, await _listingFilter.Filter(newListing));
         }
 
-        public async Task<Thing> GetThingById(string id)
+        public Task<Thing> GetThingById(string id)
+        {
+            return GetThingById(id, CancellationToken.None);
+        }
+
+        public async Task<Thing> GetThingById(string id, CancellationToken token)
         {
             var targetUri = string.Format("/by_id/{0}.json", id);
-            await ThrottleRequests();
-            await EnsureRedditCookie();
-            var thingStr = await GetAuthedString(targetUri);
+            await ThrottleRequests(token);
+            await EnsureRedditCookie(token);
+            var thingStr = await GetAuthedString(targetUri, token);
             if(thingStr.StartsWith("{\"kind\": \"Listing\""))
             {
                 var listing = JsonConvert.DeserializeObject<Listing>(thingStr);
@@ -305,27 +316,32 @@ namespace SnooSharp
             await BasicDelete(new Dictionary<string, string> { { "uh", _userState.ModHash } }, RedditBaseUrl + "/api/multi/" + url);
         }
 
+        public virtual Task<Listing> GetSubreddits(int? limit, string where = null)
+        {
+            return GetSubreddits(limit, CancellationToken.None, where);
+        }
+
         //known options at creation are where={new,popular}
-        public virtual async Task<Listing> GetSubreddits(int? limit, string where = null)
+        public virtual async Task<Listing> GetSubreddits(int? limit, CancellationToken token, string where = null)
         {
             var guardedLimit = Math.Min(100, limit ?? 100);
             if(string.IsNullOrWhiteSpace(where))
-                return await _listingFilter.Filter(await GetAuthedJson<Listing>("/reddits/.json?limit=" + guardedLimit));
+                return await _listingFilter.Filter(await GetAuthedJson<Listing>("/reddits/.json?limit=" + guardedLimit, token));
             else
-                return await _listingFilter.Filter(await GetAuthedJson<Listing>(string.Format("/subreddits/{0}.json?limit={1}", where, guardedLimit)));
+                return await _listingFilter.Filter(await GetAuthedJson<Listing>(string.Format("/subreddits/{0}.json?limit={1}", where, guardedLimit), token));
         }
 
         public async Task<TypedThing<Subreddit>> GetSubredditAbout(string name)
         {
-            return JsonConvert.DeserializeObject<TypedThing<Subreddit>>(await GetSubredditImpl(name, null));
+            return JsonConvert.DeserializeObject<TypedThing<Subreddit>>(await GetSubredditImpl(name, null, CancellationToken.None));
         }
 
         public async Task<UserListing> GetSubredditAbout(string name, string where)
         {
-            return JsonConvert.DeserializeObject<UserListing>(await GetSubredditImpl(name, where));
+            return JsonConvert.DeserializeObject<UserListing>(await GetSubredditImpl(name, where, CancellationToken.None));
         }
 
-        private async Task<string> GetSubredditImpl(string name, string where)
+        private async Task<string> GetSubredditImpl(string name, string where, CancellationToken token)
         {
             //no info for the front page
             if (name == "/")
@@ -335,7 +351,7 @@ namespace SnooSharp
 
             if (!name.Contains("/m/"))
             {
-                var subreddit = await GetAuthedString(string.Format("/r/{0}/about{1}.json", MakePlainSubredditName(name), where != null ? "/" + where : ""));
+                var subreddit = await GetAuthedString(string.Format("/r/{0}/about{1}.json", MakePlainSubredditName(name), where != null ? "/" + where : ""), token);
                 //error page
                 if (subreddit.ToLower().StartsWith("<!doctype html>"))
                 {
@@ -356,11 +372,11 @@ namespace SnooSharp
                    name = name.Replace("me/", "user/" + _userState.Username + "/");
                 }
 
-                await ThrottleRequests();
-				await EnsureRedditCookie();
-                var description = await GetAuthedString(string.Format("/api/multi/{0}/description", name));
-                await ThrottleRequests();
-                var labeledMulti = await GetAuthedString(string.Format("/api/multi/{0}/", name));
+                await ThrottleRequests(token);
+				await EnsureRedditCookie(token);
+                var description = await GetAuthedString(string.Format("/api/multi/{0}/description", name), token);
+                await ThrottleRequests(token);
+                var labeledMulti = await GetAuthedString(string.Format("/api/multi/{0}/", name), token);
                 //error page
                 if (description.ToLower().Contains("\"reason\": \"MULTI_NOT_FOUND\"") ||
                     labeledMulti.ToLower().Contains("\"reason\": \"MULTI_NOT_FOUND\""))
@@ -383,7 +399,13 @@ namespace SnooSharp
 
         public static readonly string PostByUserBaseFormat = "/user/{0}/";
 
-        public async Task<Listing> GetPostsByUser(string username, int? limit)
+
+        public Task<Listing> GetPostsByUser(string username, int? limit)
+        {
+            return GetPostsByUser(username, limit, CancellationToken.None);
+        }
+
+        public async Task<Listing> GetPostsByUser(string username, int? limit, CancellationToken token)
         {
             if (string.IsNullOrWhiteSpace(username))
                 throw new ArgumentNullException("username");
@@ -392,11 +414,16 @@ namespace SnooSharp
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
 
             var targetUri = string.Format("/user/{0}/.json?limit={1}", username, guardedLimit);
-            return await _listingFilter.Filter(await GetAuthedJson<Listing>(targetUri));
+            return await _listingFilter.Filter(await GetAuthedJson<Listing>(targetUri, token));
         }
 
-        public async Task<Listing> GetPostsBySubreddit(string subreddit, string sort = "hot", int? limit = null)
+        public Task<Listing> GetPostsBySubreddit(string subreddit, string sort = "hot", int? limit = null)
         {
+            return GetPostsBySubreddit(subreddit, CancellationToken.None, sort, limit);
+        }
+
+        public async Task<Listing> GetPostsBySubreddit(string subreddit, CancellationToken token, string sort = "hot", int? limit = null)
+        { 
             var guardedLimit = Math.Min(100, limit ?? 100);
 
             if (subreddit == null)
@@ -406,10 +433,18 @@ namespace SnooSharp
 
 			var targetUri = string.Format("{0}{2}.json?limit={1}", subreddit, guardedLimit, subreddit.EndsWith("/") ? sort : "/" + sort);
 
-            return await _listingFilter.Filter(await GetAuthedJson<Listing>(targetUri));
+            return await _listingFilter.Filter(await GetAuthedJson<Listing>(targetUri, token));
         }
 		private static int getMoreCount = 0;
-        public async Task<Listing> GetMoreOnListing(More more, string contentId, string subreddit)
+
+
+        public Task<Listing> GetMoreOnListing(More more, string contentId, string subreddit)
+        {
+            return GetMoreOnListing(more, contentId, subreddit, CancellationToken.None);
+        }
+
+
+        public async Task<Listing> GetMoreOnListing(More more, string contentId, string subreddit, CancellationToken token)
         {
 			var targetUri = RedditBaseUrl + "/api/morechildren.json";
 
@@ -436,9 +471,9 @@ namespace SnooSharp
                 arguments.Add("r", subreddit);
             }
 			getMoreCount++;
-            await ThrottleRequests();
-			await EnsureRedditCookie();
-            var result = await _httpClient.PostAsync(targetUri, new FormUrlEncodedContent(arguments));
+            await ThrottleRequests(token);
+			await EnsureRedditCookie(token);
+            var result = await _httpClient.PostAsync(targetUri, new FormUrlEncodedContent(arguments), token);
             var resultString = await result.Content.ReadAsStringAsync();
             var newListing = new Listing
             {
@@ -456,8 +491,12 @@ namespace SnooSharp
 			else
 				return newListing;
         }
+        public Task<Thing> GetLinkByUrl(string url)
+        {
+            return GetLinkByUrl(url, CancellationToken.None);
+        }
 
-        public async Task<Thing> GetLinkByUrl(string url)
+        public async Task<Thing> GetLinkByUrl(string url, CancellationToken token)
         {
             var originalUrl = url;
             if (originalUrl.Contains(".json"))
@@ -479,7 +518,7 @@ namespace SnooSharp
 				url = url.Substring(url.IndexOf("reddit.com") + "reddit.com".Length);
 			}
 
-            var json = await GetAuthedString(url);
+            var json = await GetAuthedString(url, token);
             if (json.StartsWith("["))
             {
                 var listings = JsonConvert.DeserializeObject<Listing[]>(json);
@@ -504,7 +543,12 @@ namespace SnooSharp
                 return null;
         }
 
-        public async Task<Listing> GetCommentsOnPost(string subreddit, string permalink, int? limit, string context = null, string sort = null )
+        public Task<Listing> GetCommentsOnPost(string subreddit, string permalink, int? limit, string context = null, string sort = null)
+        {
+            return GetCommentsOnPost(subreddit, permalink, CancellationToken.None, limit, context, sort);
+        }
+
+        public async Task<Listing> GetCommentsOnPost(string subreddit, string permalink, CancellationToken token, int? limit = null, string context = null, string sort = null)
         {
             return await Task.Run(async () => 
             {
@@ -554,7 +598,7 @@ namespace SnooSharp
                 
 
                 Listing listing = null;
-                var comments = await GetAuthedString(targetUri);
+                var comments = await GetAuthedString(targetUri, token);
                 if (comments.StartsWith("["))
                 {
                     var listings = JsonConvert.DeserializeObject<Listing[]>(comments);
@@ -579,12 +623,15 @@ namespace SnooSharp
                     }
                 }
                 return listing;
-            });
+            }, token);
         }
-
         public Task<Listing> GetMessages(int? limit)
         {
-            return GetMail("inbox", limit);
+            return GetMail("inbox", limit, CancellationToken.None);
+        }
+        public Task<Listing> GetMessages(int? limit, CancellationToken token)
+        {
+            return GetMail("inbox", limit, token);
         }
 
         public void AddFlairInfo(string linkId, string opName)
@@ -595,7 +642,13 @@ namespace SnooSharp
             }
         }
 
-        public async Task<Listing> GetAdditionalFromListing(string baseUrl, string after, int? limit = null)
+
+        public Task<Listing> GetAdditionalFromListing(string baseUrl, string after, int? limit = null)
+        {
+            return GetAdditionalFromListing(baseUrl, after, CancellationToken.None, limit);
+        }
+
+        public async Task<Listing> GetAdditionalFromListing(string baseUrl, string after, CancellationToken token, int? limit = null)
         {
             var maxLimit = _userState.IsGold ? 1500 : 500;
             var guardedLimit = Math.Min(maxLimit, limit ?? maxLimit);
@@ -607,14 +660,19 @@ namespace SnooSharp
             else
 				targetUri = string.Format("{0}.json?limit={1}&after={2}", baseUrl, guardedLimit, after);
 
-            return await _listingFilter.Filter(await GetAuthedJson<Listing>(targetUri));
+            return await _listingFilter.Filter(await GetAuthedJson<Listing>(targetUri, token));
 
         }
 
-        public async Task<TypedThing<Account>> GetAccountInfo(string accountName)
+        public Task<TypedThing<Account>> GetAccountInfo(string accountName)
+        {
+            return GetAccountInfo(accountName, CancellationToken.None);
+        }
+
+        public async Task<TypedThing<Account>> GetAccountInfo(string accountName, CancellationToken token)
         {
             var targetUri = string.Format("/user/{0}/about.json", accountName);
-            return new TypedThing<Account>(await GetAuthedJson<Thing>(targetUri));
+            return new TypedThing<Account>(await GetAuthedJson<Thing>(targetUri, token));
 
         }
 
@@ -762,14 +820,14 @@ namespace SnooSharp
             }
 
 
-			await EnsureRedditCookie();
+			await EnsureRedditCookie(CancellationToken.None);
             HttpResponseMessage response = null;
             string responseString = null;
             do
             {
                 try
                 {
-                    await ThrottleRequests();
+                    await ThrottleRequests(CancellationToken.None);
                     response = await _httpClient.PostAsync(uri, new FormUrlEncodedContent(urlEncodedData));
                     responseString = await response.Content.ReadAsStringAsync();
                 }
@@ -825,8 +883,8 @@ namespace SnooSharp
 
         private async Task BasicPost(Dictionary<string, string> arguments, string url)
         {
-            await ThrottleRequests();
-            await EnsureRedditCookie();
+            await ThrottleRequests(CancellationToken.None);
+            await EnsureRedditCookie(CancellationToken.None);
             HttpResponseMessage responseMessage = null;
             try
             {
@@ -849,8 +907,8 @@ namespace SnooSharp
 
         private async Task BasicDelete(Dictionary<string, string> arguments, string url)
         {
-            await ThrottleRequests();
-            await EnsureRedditCookie();
+            await ThrottleRequests(CancellationToken.None);
+            await EnsureRedditCookie(CancellationToken.None);
             HttpResponseMessage responseMessage = null;
             try
             {
@@ -961,10 +1019,10 @@ namespace SnooSharp
             return AuthorFlairKind.None;
         }
 
-        private async Task<Listing> GetUserMultis(Listing listing)
+        private async Task<Listing> GetUserMultis(Listing listing, CancellationToken token)
         {
             var targetUri = "/api/multi/mine.json";
-            var subreddits = await GetAuthedString(targetUri);
+            var subreddits = await GetAuthedString(targetUri, token);
             if (subreddits == "[]")
                 return listing;
             else
@@ -984,12 +1042,17 @@ namespace SnooSharp
             return listing;
         }
 
-        public async Task<Listing> GetSubscribedSubredditListing()
+        public Task<Listing> GetSubscribedSubredditListing()
+        {
+            return GetSubscribedSubredditListing(CancellationToken.None);
+        }
+
+        public async Task<Listing> GetSubscribedSubredditListing(CancellationToken token)
         {
             var targetUri = "/reddits/mine.json?limit=100";
             try
             {
-                return await GetAuthedJson<Listing>(targetUri);
+                return await GetAuthedJson<Listing>(targetUri, token);
             }
             catch 
             {
@@ -997,60 +1060,95 @@ namespace SnooSharp
             }
         }
 
-        public async Task<List<Recommendation>> GetRecomendedSubreddits(IEnumerable<string> inputSubreddits)
+        public Task<List<Recommendation>> GetRecomendedSubreddits(IEnumerable<string> inputSubreddits)
+        {
+            return GetRecomendedSubreddits(inputSubreddits, CancellationToken.None);
+        }
+
+        public async Task<List<Recommendation>> GetRecomendedSubreddits(IEnumerable<string> inputSubreddits, CancellationToken token)
         {
             var targetUri = "/api/recommend/sr/" + string.Join(",", inputSubreddits.Select(MakePlainSubredditName));
-            var subreddits = await GetAuthedString(targetUri);
-            return await Task.Run(() => JsonConvert.DeserializeObject<List<Recommendation>>(subreddits));
+            var subreddits = await GetAuthedString(targetUri, token);
+            return await Task.Run(() => JsonConvert.DeserializeObject<List<Recommendation>>(subreddits), token);
         }
 
 
         public async Task<bool> CheckLogin(string loginToken)
         {
-            await ThrottleRequests();
-			await EnsureRedditCookie();
+            await ThrottleRequests(CancellationToken.None);
+			await EnsureRedditCookie(CancellationToken.None);
 			var meString = await _httpClient.GetStringAsync(RedditBaseUrl + "/api/me.json");
             return (!string.IsNullOrWhiteSpace(meString) && meString != "{}");
         }
 
-        public async Task<Listing> GetSaved(int? limit)
+        public Task<Listing> GetSaved(int? limit)
         {
-            return await GetUserInfoListing(_userState.Username, "saved", limit);
+            return GetSaved(limit);
         }
 
-        public async Task<Listing> GetLiked(int? limit)
+        public async Task<Listing> GetSaved(int? limit, CancellationToken token)
         {
-            return await GetUserInfoListing(_userState.Username, "liked", limit);
+            return await GetUserInfoListing(_userState.Username, "saved", limit, token);
         }
 
-        private async Task<Listing> GetUserInfoListing(string username, string kind, int? limit)
+        public Task<Listing> GetLiked(int? limit)
+        {
+            return GetLiked(limit, CancellationToken.None);
+        }
+
+        public async Task<Listing> GetLiked(int? limit, CancellationToken token)
+        {
+            return await GetUserInfoListing(_userState.Username, "liked", limit, token);
+        }
+
+        private async Task<Listing> GetUserInfoListing(string username, string kind, int? limit, CancellationToken token)
         {
             var guardedLimit = Math.Min(100, limit ?? 100);
             var targetUri = string.Format("/user/{0}/{2}/.json?limit={1}", username, guardedLimit, kind);
-            return await _listingFilter.Filter(await GetAuthedJson<Listing>(targetUri));
+            return await _listingFilter.Filter(await GetAuthedJson<Listing>(targetUri, token));
         }
 
-        public async Task<Listing> GetUserTrophies(string username, int? limit)
+        public Task<Listing> GetUserTrophies(string username, int? limit)
+        {
+            return GetUserTrophies(username, limit);
+        }
+
+        public async Task<Listing> GetUserTrophies(string username, int? limit, CancellationToken token)
         {
             var targetUri = string.Format("/api/v1/user/{0}/trophies?limit={1}", username, Math.Min(100, limit ?? 100));
-            return await GetAuthedJson<Listing>(targetUri);
+            return await GetAuthedJson<Listing>(targetUri, token);
         }
 
-        public async Task<Thing> GetUserInfo(string username, string kind, int? limit)
+        public Task<Thing> GetUserInfo(string username, string kind, int? limit)
+        {
+            return GetUserInfo(username, kind, limit, CancellationToken.None);
+        }
+
+        public async Task<Thing> GetUserInfo(string username, string kind, int? limit, CancellationToken token)
         {
             var guardedLimit = Math.Min(100, limit ?? 100);
             var targetUri = string.Format("/user/{0}/{1}/.json", username, kind);
-            return await GetAuthedJson<Thing>(targetUri);
+            return await GetAuthedJson<Thing>(targetUri, token);
         }
 
-        public async Task<Listing> GetDisliked(int? limit)
+        public Task<Listing> GetDisliked(int? limit)
         {
-            return await GetUserInfoListing(_userState.Username, "disliked", limit);
+            return GetDisliked(limit, CancellationToken.None);
+        }
+
+        public async Task<Listing> GetDisliked(int? limit, CancellationToken token)
+        {
+            return await GetUserInfoListing(_userState.Username, "disliked", limit, token);
         }
 
         public Task<Listing> GetSentMessages(int? limit)
         {
-            return GetMail("sent", limit);
+            return GetMail("sent", limit, CancellationToken.None);
+        }
+
+        public Task<Listing> GetSentMessages(int? limit, CancellationToken token)
+        {
+            return GetMail("sent", limit, token);
         }
 
         public async Task ThingAction(string action, string thingId)
@@ -1068,7 +1166,7 @@ namespace SnooSharp
 
         public Task UnSaveThing(string thingId)
         {
-            return ThingAction("unsafe", thingId);
+            return ThingAction("unsave", thingId);
         }
 
         public async Task MarkVisited(IEnumerable<string> ids)
@@ -1085,14 +1183,18 @@ namespace SnooSharp
             }
         }
 
+        public Task<Listing> GetModActions(string subreddit, int? limit)
+        {
+            return GetModActions(subreddit, limit, CancellationToken.None);
+        }
 
-        public async Task<Listing> GetModActions(string subreddit, int? limit)
+        public async Task<Listing> GetModActions(string subreddit, int? limit, CancellationToken token)
         {
             var guardedLimit = Math.Min(100, limit ?? 100);
 
             var targetUri = string.Format("/r/{0}/about/log.json?limit={1}", subreddit, guardedLimit);
 
-            var messages = await GetAuthedString(targetUri);
+            var messages = await GetAuthedString(targetUri, token);
             if (messages == "\"{}\"")
             {
                 return new Listing { Kind = "Listing", Data = new ListingData { Children = new List<Thing>() } };
@@ -1100,15 +1202,15 @@ namespace SnooSharp
             return JsonConvert.DeserializeObject<Listing>(messages);
         }
 
-        private async Task<Listing> GetMail(string kind, int? limit)
+        private async Task<Listing> GetMail(string kind, int? limit, CancellationToken token)
         {
             var guardedLimit = Math.Min(100, limit ?? 100);
 
 			var targetUri = string.Format(RedditBaseUrl + MailBaseUrlFormat + ".json?limit={1}", kind, guardedLimit);
 
-            await ThrottleRequests();
-			await EnsureRedditCookie();
-            var messages = await GetAuthedString(targetUri);
+            await ThrottleRequests(token);
+			await EnsureRedditCookie(token);
+            var messages = await GetAuthedString(targetUri, token);
             if (messages == "\"{}\"")
             {
                 return new Listing { Kind = "Listing", Data = new ListingData { Children = new List<Thing>() } };
@@ -1122,7 +1224,12 @@ namespace SnooSharp
 
         public Task<Listing> GetModMail(int? limit)
         {
-            return GetMail("moderator", limit);
+            return GetMail("moderator", limit, CancellationToken.None);
+        }
+
+        public Task<Listing> GetModMail(int? limit, CancellationToken token)
+        {
+            return GetMail("moderator", limit, token);
         }
 
         public Task ApproveThing(string thingId)
@@ -1220,7 +1327,7 @@ namespace SnooSharp
         //but keep it sane. On average, we should see no more than one request every two seconds from you.
         //the above statement is from the reddit api docs, but its not quite true, there are some api's that have logging 
         //set for 15 requests in 30 seconds, so we can allow some burstiness but it must fit in the 15 requests/30 seconds rule
-        public static async Task ThrottleRequests()
+        public static async Task ThrottleRequests(CancellationToken token)
         {
             var offset = DateTime.Now - _lastRequestMade;
             if (offset.TotalMilliseconds < 1000)
