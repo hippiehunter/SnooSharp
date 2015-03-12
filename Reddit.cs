@@ -1237,6 +1237,19 @@ namespace SnooSharp
             return ThingAction("approve", thingId);
         }
 
+		public async Task DeleteLinkOrComment(string thingId)
+		{
+			var targetUri = RedditBaseUrl + "/api/del";
+
+			var content = new Dictionary<string, string>
+            {
+                { "id", thingId},
+                { "uh", _userState.ModHash}
+            };
+
+			await BasicPost(content, targetUri);
+		}
+
         public async Task RemoveThing(string thingId, bool spam)
         {
 			var targetUri = RedditBaseUrl + "/api/remove";
