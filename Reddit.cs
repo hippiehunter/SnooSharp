@@ -135,6 +135,10 @@ namespace SnooSharp
 
 				_httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _userState.OAuth.AccessToken);
 			}
+			else
+			{
+				_httpClient.DefaultRequestHeaders.Authorization = null;
+			}
         }
 
         public async Task<Account> GetMe()

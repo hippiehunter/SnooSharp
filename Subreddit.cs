@@ -26,7 +26,7 @@ namespace SnooSharp
             PublicDescription = Description;
             Headertitle = DisplayName;
 			if (target == "/")
-				Id = "front page";
+				Id = "";
         }
 
         [JsonProperty("description")]

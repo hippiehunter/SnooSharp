@@ -13,6 +13,7 @@ namespace SnooSharp
 		public RedditOAuth OAuth { get; set; }
         public string ModHash { get; set; }
         public bool IsGold { get; set; }
+		public bool IsMod { get; set; }
         public bool NeedsCaptcha { get; set; }
 		public bool IsDefault { get; set; }
     }
