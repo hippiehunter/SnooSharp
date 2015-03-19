@@ -1051,18 +1051,34 @@ namespace SnooSharp
             return GetSubscribedSubredditListing(CancellationToken.None);
         }
 
-        public async Task<Listing> GetSubscribedSubredditListing(CancellationToken token)
+        public Task<Listing> GetSubscribedSubredditListing(CancellationToken token)
         {
-            var targetUri = "/reddits/mine.json?limit=100";
-            try
-            {
-                return await GetAuthedJson<Listing>(targetUri, token);
-            }
-            catch 
-            {
-                return new Listing { Data = new ListingData { Children = new List<Thing>() } };
-            }
+			return GetSubredditListing("subscriber", 100, token);
         }
+
+		public Task<Listing> GetContributorSubredditListing(CancellationToken token)
+		{
+			return GetSubredditListing("contributor", 100, token);
+		}
+
+		public Task<Listing> GetModeratorSubredditListing(CancellationToken token)
+		{
+			return GetSubredditListing("moderator", 100, token);
+		}
+
+		public async Task<Listing> GetSubredditListing(string where, int limit, CancellationToken token)
+		{
+			var targetUri = string.Format("/subreddits/mine/{0}.json?limit={1}", where, limit);
+			try
+			{
+				return await GetAuthedJson<Listing>(targetUri, token);
+			}
+			catch
+			{
+				return new Listing { Data = new ListingData { Children = new List<Thing>() } };
+			}
+		}
+
 
         public Task<List<Recommendation>> GetRecomendedSubreddits(IEnumerable<string> inputSubreddits)
         {
@@ -1192,19 +1208,37 @@ namespace SnooSharp
             return GetModActions(subreddit, limit, CancellationToken.None);
         }
 
-        public async Task<Listing> GetModActions(string subreddit, int? limit, CancellationToken token)
+        public Task<Listing> GetModActions(string subreddit, int? limit, CancellationToken token)
         {
-            var guardedLimit = Math.Min(100, limit ?? 100);
-
-            var targetUri = string.Format("/r/{0}/about/log.json?limit={1}", subreddit, guardedLimit);
-
-            var messages = await GetAuthedString(targetUri, token);
-            if (messages == "\"{}\"")
-            {
-                return new Listing { Kind = "Listing", Data = new ListingData { Children = new List<Thing>() } };
-            }
-            return JsonConvert.DeserializeObject<Listing>(messages);
+			return GetSubredditAbout(subreddit, "log", limit, token);
         }
+
+		
+
+		public Task<Listing> GetModQueue(string subreddit, int? limit)
+		{
+			return GetModQueue(subreddit, limit, CancellationToken.None);
+		}
+
+		public Task<Listing> GetModQueue(string subreddit, int? limit, CancellationToken token)
+		{
+			return GetSubredditAbout(subreddit, "modqueue", limit, token);
+		}
+
+		public static readonly string SubredditAboutBaseUrlFormat = "/r/{0}/about/{1}";
+		public async Task<Listing> GetSubredditAbout(string subreddit, string where, int? limit, CancellationToken token)
+		{
+			var guardedLimit = Math.Min(20, limit ?? 100);
+
+			var targetUri = string.Format(SubredditAboutBaseUrlFormat + ".json?limit={2}", subreddit, where, guardedLimit);
+
+			var messages = await GetAuthedString(targetUri, token);
+			if (messages == "\"{}\"")
+			{
+				return new Listing { Kind = "Listing", Data = new ListingData { Children = new List<Thing>() } };
+			}
+			return JsonConvert.DeserializeObject<Listing>(messages);
+		}
 
         private async Task<Listing> GetMail(string kind, int? limit, CancellationToken token)
         {
