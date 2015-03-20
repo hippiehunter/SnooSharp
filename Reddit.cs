@@ -1063,12 +1063,12 @@ namespace SnooSharp
 
 		public Task<Listing> GetModeratorSubredditListing(CancellationToken token)
 		{
-			return GetSubredditListing("moderator", 100, token);
+			return GetSubredditListing("moderator", 20, token);
 		}
 
 		public async Task<Listing> GetSubredditListing(string where, int limit, CancellationToken token)
 		{
-			var targetUri = string.Format("/subreddits/mine/{0}.json?limit={1}", where, limit);
+			var targetUri = string.Format("/subreddits/mine/{0}.json", where);
 			try
 			{
 				return await GetAuthedJson<Listing>(targetUri, token);
@@ -1244,7 +1244,9 @@ namespace SnooSharp
         {
             var guardedLimit = Math.Min(100, limit ?? 100);
 
-			var targetUri = string.Format(RedditBaseUrl + MailBaseUrlFormat + ".json?limit={1}", kind, guardedLimit);
+			var targetUri = limit != null ? 
+				string.Format(RedditBaseUrl + MailBaseUrlFormat + ".json?limit={1}", kind, guardedLimit) :
+				string.Format(RedditBaseUrl + MailBaseUrlFormat + ".json", kind);
 
             await ThrottleRequests(token);
 			await EnsureRedditCookie(token);

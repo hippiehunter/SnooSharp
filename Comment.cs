@@ -52,5 +52,17 @@ namespace SnooSharp
         public int Gilded { get; set; }
         [JsonProperty("context", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string Context { get; set; }
+
+		
+		[JsonProperty("edited")]
+		public bool? Edited { get; set; }
+		[JsonProperty("approved_by")]
+		public string ApprovedBy { get; set; }
+		[JsonProperty("user_reports")]
+		public List<string[]> UserReports { get; set; }
+		[JsonProperty("mod_reports")]
+		public List<string[]> ModReports { get; set; }
+		[JsonProperty("num_reports")]
+		public int? NumberOfReports { get; set; }
     }
 }
