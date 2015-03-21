@@ -759,6 +759,11 @@ namespace SnooSharp
             return ThingAction("report", thingId);
         }
 
+        public virtual Task AddReportOnThing(string thingId, string reason)
+        {
+            return ThingAction("report", thingId, new Dictionary<string, string> { { "reason", reason } });
+        }
+
         public virtual Task HideThing(string thingId)
         {
             return ThingAction("hide", thingId);
@@ -1169,6 +1174,24 @@ namespace SnooSharp
         public Task<Listing> GetSentMessages(int? limit, CancellationToken token)
         {
             return GetMail("sent", limit, token);
+        }
+
+        public async Task ThingAction(string action, string thingId, Dictionary<string, string> additionalParams)
+        {
+            var targetUri = RedditBaseUrl + "/api/" + action;
+
+            var content = new Dictionary<string, string>
+            {
+                { "id", thingId},
+                { "uh", _userState.ModHash}
+            };
+
+            foreach (var par in additionalParams)
+            {
+                content.Add(par.Key, par.Value);
+            }
+
+            await BasicPost(content, targetUri);
         }
 
         public async Task ThingAction(string action, string thingId)
