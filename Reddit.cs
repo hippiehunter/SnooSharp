@@ -347,10 +347,11 @@ namespace SnooSharp
 
         private async Task<string> GetSubredditImpl(string name, string where, CancellationToken token)
         {
+			name = name.ToLower();
             //no info for the front page
             if (name == "/")
                 return JsonConvert.SerializeObject(new TypedThing<Subreddit>(new Thing { Kind = "t5", Data = new Subreddit { Headertitle = name } }));
-            else if (name == "all")
+			else if (name == "all" || name == "/r/all")
                 return JsonConvert.SerializeObject(new TypedThing<Subreddit>(new Thing { Kind = "t5", Data = new Subreddit { Headertitle = "all", Url = "/r/all", Name = "all", DisplayName="all", Title="all", Id="t5_fakeid" } }));
 
             if (!name.Contains("/m/"))
@@ -1051,9 +1052,16 @@ namespace SnooSharp
             return listing;
         }
 
-        public Task<Listing> GetSubscribedSubredditListing()
+        public async Task<Listing> GetSubscribedSubredditListing()
         {
-            return GetSubscribedSubredditListing(CancellationToken.None);
+			Listing subListing = null;
+			Listing finalResult = subListing = await GetSubscribedSubredditListing(CancellationToken.None);
+			while (subListing.Data.After != null)
+			{
+				subListing = await GetAdditionalFromListing(string.Format("/subreddits/mine/{0}.json", "subscriber"), subListing.Data.After, 100);
+				finalResult.Data.Children.AddRange(subListing.Data.Children);
+			}
+			return finalResult;
         }
 
         public Task<Listing> GetSubscribedSubredditListing(CancellationToken token)
@@ -1073,7 +1081,9 @@ namespace SnooSharp
 
 		public async Task<Listing> GetSubredditListing(string where, int limit, CancellationToken token)
 		{
-			var targetUri = string.Format("/subreddits/mine/{0}.json", where);
+			var targetUri = limit == 20 ? 
+				string.Format("/subreddits/mine/{0}.json", where) :
+				string.Format("/subreddits/mine/{0}.json?limit={1}", where, limit);
 			try
 			{
 				return await GetAuthedJson<Listing>(targetUri, token);
