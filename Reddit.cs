@@ -163,10 +163,13 @@ namespace SnooSharp
                 return await GetAuthedString(url, token);
             else if (responseMessage.IsSuccessStatusCode)
             {
-                if (string.IsNullOrWhiteSpace(bodyString) || bodyString == "{}" || bodyString == "\"{}\"")
-                    throw new RedditException("body string was empty but no error code was present");
-                else
-                    return bodyString;
+				if (string.IsNullOrWhiteSpace(bodyString) || bodyString == "{}" || bodyString == "\"{}\"")
+					throw new RedditException("body string was empty but no error code was present");
+				else
+				{
+					_failedRequestCount = 0;
+					return bodyString;
+				}
             }
             else
             {
@@ -181,13 +184,16 @@ namespace SnooSharp
                     case HttpStatusCode.ServiceUnavailable:
                         {
                             if (_failedRequestCount < 5)
-                            {
-                                return await GetAuthedString(url, token);
-                            }
-                            break;
+								return await GetAuthedString(url, token);
+							else
+								break;
                         }
                     case HttpStatusCode.NotFound:
-                        throw new RedditNotFoundException(url);
+						//reddit likes to return 404 for no apparent reason
+						if (_failedRequestCount < 2)
+							return await GetAuthedString(url, token);
+						else
+							throw new RedditNotFoundException(url);
                     case HttpStatusCode.Forbidden:
                         throw new RedditException(url + " forbidden");
                 }
