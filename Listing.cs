@@ -15,6 +15,8 @@ namespace SnooSharp
         public string Kind { get; set; }
         [JsonProperty("data")]
         public ListingData Data { get; set; }
+        [JsonIgnore]
+        public DateTime? DataAge { get; set; }
     }
 
     [DataContract]

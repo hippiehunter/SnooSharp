@@ -86,6 +86,8 @@ namespace SnooSharp
     {
         [JsonProperty("name")]
         public string Name { get; set; }
+        [JsonProperty("data")]
+        public Subreddit Data { get; set; }
     }
 
     [DataContract]

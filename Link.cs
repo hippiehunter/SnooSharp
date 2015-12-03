@@ -41,6 +41,8 @@ namespace SnooSharp
         public object Media { get; set; }
         [JsonProperty("media_embed")]
         public MediaEmbed MediaEmbed { get; set; }
+        [JsonProperty("preview")]
+        public Preview Preview { get; set; }
         [JsonProperty("num_comments")]
         public int CommentCount { get; set; }
         [JsonProperty("over_18")]
@@ -99,5 +101,36 @@ namespace SnooSharp
         public int Width { get; set; }
         [JsonProperty("height")]
         public int Height { get; set; }
+    }
+
+    public class PreviewSource
+    {
+        public string url { get; set; }
+        public int width { get; set; }
+        public int height { get; set; }
+    }
+
+    public class PreviewResolution
+    {
+        public string url { get; set; }
+        public int width { get; set; }
+        public int height { get; set; }
+    }
+
+    public class PreviewVariants
+    {
+    }
+
+    public class PreviewImage
+    {
+        public PreviewSource source { get; set; }
+        public List<PreviewResolution> resolutions { get; set; }
+        public PreviewVariants variants { get; set; }
+        public string id { get; set; }
+    }
+
+    public class Preview
+    {
+        public List<PreviewImage> images { get; set; }
     }
 }

@@ -8,7 +8,7 @@ namespace SnooSharp
 {
     public interface IActionDeferralSink
     {
-        void Defer(Dictionary<string, string> arguments, string action);
-        Tuple<Dictionary<string, string>, string> DequeDeferral();
+        void Defer(Dictionary<string, string> arguments, string action, string verb);
+        Tuple<Dictionary<string, string>, string, string> DequeDeferral();
     }
 }
