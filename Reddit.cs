@@ -252,6 +252,17 @@ namespace SnooSharp
             return result;
         }
 
+        public async Task CopyMulti(string from, string to, string displayName)
+        {
+            await BasicPut(new Dictionary<string, string>
+            {
+                { "from", from },
+                { "to", to },
+                { "display_name", displayName },
+                { "uh", _userState.ModHash },
+            }, "/api/multi/copy");
+        }
+
         public async Task CreateOrUpdateMulti(string multiName, string description, string displayName, string iconName, string keyColor, string visibility, string weightingScheme, IEnumerable<string> subreddits)
         {
             var targetUrl = "/api/multi/" + multiName;
