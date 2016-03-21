@@ -100,7 +100,7 @@ namespace SnooSharp
             
         }
 
-        private async Task<T> GetAuthedJson<T>(string url, CancellationToken token, IProgress<float> progress, Dictionary<string, string> body = null)
+        private async Task<T> GetAuthedJson<T>(string url, CancellationToken token, IProgress<float> progress, bool ignoreCache, Dictionary<string, string> body = null)
         {
             return await Task.Run(async () => JsonConvert.DeserializeObject<T>(await _networkLayer.Get(url, token, progress, body)));
         }
@@ -148,7 +148,7 @@ namespace SnooSharp
 		//this one is seperated out so we can use it interally on initial user login
 		public async Task<Account> GetIdentity(CancellationToken token, IProgress<float> progress)
 		{
-            return await GetAuthedJson<Account>("/api/v1/me", token, progress);
+            return await GetAuthedJson<Account>("/api/v1/me", token, progress, true);
 		}
 
         public async Task<Tuple<string, Listing>> Search(string query, int? limit, bool reddits, string restrictedToSubreddit, CancellationToken token, IProgress<float> progress, bool ignoreCache)
@@ -512,10 +512,10 @@ namespace SnooSharp
 
         }
 
-        public async Task<TypedThing<Account>> GetAccountInfo(string accountName, CancellationToken token, IProgress<float> progress)
+        public async Task<TypedThing<Account>> GetAccountInfo(string accountName, CancellationToken token, IProgress<float> progress, bool ignoreCache)
         {
             var targetUri = string.Format("/user/{0}/about.json", accountName);
-            return new TypedThing<Account>(await GetAuthedJson<Thing>(targetUri, token, progress));
+            return new TypedThing<Account>(await GetAuthedJson<Thing>(targetUri, token, progress, ignoreCache));
 
         }
 
@@ -810,10 +810,10 @@ namespace SnooSharp
             return AuthorFlairKind.None;
         }
 
-        public async Task<TypedThing<LabeledMulti>[]> GetUserMultis(CancellationToken token, IProgress<float> progress)
+        public async Task<TypedThing<LabeledMulti>[]> GetUserMultis(CancellationToken token, IProgress<float> progress, bool ignoreCache)
         {
             var targetUri = "/api/multi/mine.json";
-            var subreddits = await GetAuthedJson< TypedThing < LabeledMulti >[]>(targetUri, token, progress, new Dictionary<string, string> { { "expand_srs", "True" } });
+            var subreddits = await GetAuthedJson< TypedThing < LabeledMulti >[]>(targetUri, token, progress, ignoreCache, new Dictionary <string, string> { { "expand_srs", "True" } });
             if (subreddits.Length == 0)
                 return subreddits;
             else
@@ -824,6 +824,13 @@ namespace SnooSharp
                 }
             }
             
+            return subreddits;
+        }
+
+        public async Task<TypedThing<LabeledMulti>[]> GetUserMultis(string targetUser, CancellationToken token, IProgress<float> progress, bool ignoreCache)
+        {
+            var targetUri = string.Format("/api/multi/user/{0}.json", targetUser);
+            var subreddits = await GetAuthedJson<TypedThing<LabeledMulti>[]>(targetUri, token, progress, ignoreCache, new Dictionary<string, string> { { "expand_srs", "True" } });
             return subreddits;
         }
 
@@ -881,11 +888,10 @@ namespace SnooSharp
             return await GetListing(targetUri, token, progress, ignoreCache, null);
         }
 
-        public async Task<Thing> GetUserInfo(string username, string kind, int? limit, CancellationToken token, IProgress<float> progress)
+        public async Task<Thing> GetUserInfo(string username, string kind, CancellationToken token, IProgress<float> progress, bool ignoreCache)
         {
-            var guardedLimit = Math.Min(100, limit ?? 100);
             var targetUri = string.Format("/user/{0}/{1}/.json", username, kind);
-            return await GetAuthedJson<Thing>(targetUri, token, progress);
+            return await GetAuthedJson<Thing>(targetUri, token, progress, ignoreCache);
         }
 
         public async Task<Listing> GetDisliked(int? limit, CancellationToken token, IProgress<float> progress, bool ignoreCache)
