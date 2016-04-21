@@ -152,6 +152,10 @@ namespace SnooSharp.Converters
                                     targetThing.Data = new ModAction();
                                     dataType = typeof(ModAction);
                                     break;
+                                case "LabeledMulti":
+                                    targetThing.Data = new LabeledMulti();
+                                    dataType = typeof(LabeledMulti);
+                                    break;
 								case null:
 									targetThing.Kind = "t5";
 									targetThing.Data = new Subreddit();
