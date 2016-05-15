@@ -58,8 +58,8 @@ namespace SnooSharp
         {
             await ThrottleRequests(token);
             await EnsureRedditCookie(token);
-
-            HttpRequestMessage sendMessage = new HttpRequestMessage(HttpMethod.Get, RedditBaseUrl + url);
+            var requestUri = new Uri(RedditBaseUrl + (url.Contains("://") ? new Uri(url).PathAndQuery : url));
+            HttpRequestMessage sendMessage = new HttpRequestMessage(HttpMethod.Get, requestUri);
 
             if (body != null)
             {
@@ -67,47 +67,60 @@ namespace SnooSharp
             }
 
             var responseMessage = await _httpClient.SendAsync(sendMessage, HttpCompletionOption.ResponseContentRead, token);
-            var bodyString = ProcessJsonErrors(await responseMessage.Content.ReadAsStringAsync());
-            if (bodyString.StartsWith("<!doctype html><html><title>") && bodyString.EndsWith("try again and hopefully we will be fast enough this time."))
-                return await Get(url, token, progress, body);
-            else if (responseMessage.IsSuccessStatusCode)
+
+            if (!responseMessage.IsSuccessStatusCode && sendMessage.RequestUri != requestUri)
             {
-                if (string.IsNullOrWhiteSpace(bodyString) || bodyString == "{}" || bodyString == "\"{}\"")
-                    throw new RedditException("body string was empty but no error code was present");
-                else
+                var result = await Get(sendMessage.RequestUri.PathAndQuery, token, progress, body);
+                if (body != null)
                 {
-                    _failedRequestCount = 0;
-                    return bodyString;
+                    body.Add("redirected-url", sendMessage.RequestUri.PathAndQuery);
                 }
+                return result;
             }
             else
             {
-                _failedRequestCount++;
-                switch (responseMessage.StatusCode)
+                var bodyString = ProcessJsonErrors(await responseMessage.Content.ReadAsStringAsync());
+                if (bodyString.StartsWith("<!doctype html><html><title>") && bodyString.EndsWith("try again and hopefully we will be fast enough this time."))
+                    return await Get(url, token, progress, body);
+                else if (responseMessage.IsSuccessStatusCode)
                 {
-                    case HttpStatusCode.GatewayTimeout:
-                    case HttpStatusCode.RequestTimeout:
-                    case HttpStatusCode.BadGateway:
-                    case HttpStatusCode.BadRequest:
-                    case HttpStatusCode.InternalServerError:
-                    case HttpStatusCode.ServiceUnavailable:
-                        {
-                            if (_failedRequestCount < 5)
+                    if (string.IsNullOrWhiteSpace(bodyString) || bodyString == "{}" || bodyString == "\"{}\"")
+                        throw new RedditException("body string was empty but no error code was present");
+                    else
+                    {
+                        _failedRequestCount = 0;
+                        return bodyString;
+                    }
+                }
+                else
+                {
+                    _failedRequestCount++;
+                    switch (responseMessage.StatusCode)
+                    {
+                        case HttpStatusCode.GatewayTimeout:
+                        case HttpStatusCode.RequestTimeout:
+                        case HttpStatusCode.BadGateway:
+                        case HttpStatusCode.BadRequest:
+                        case HttpStatusCode.InternalServerError:
+                        case HttpStatusCode.ServiceUnavailable:
+                            {
+                                if (_failedRequestCount < 5)
+                                    return await Get(url, token, progress, body);
+                                else
+                                    break;
+                            }
+                        case HttpStatusCode.NotFound:
+                            //reddit likes to return 404 for no apparent reason
+                            if (_failedRequestCount < 2)
                                 return await Get(url, token, progress, body);
                             else
-                                break;
-                        }
-                    case HttpStatusCode.NotFound:
-                        //reddit likes to return 404 for no apparent reason
-                        if (_failedRequestCount < 2)
-                            return await Get(url, token, progress, body);
-                        else
-                            throw new RedditNotFoundException(url);
-                    case HttpStatusCode.Forbidden:
-                        throw new RedditException(url + " forbidden");
+                                throw new RedditNotFoundException(url);
+                        case HttpStatusCode.Forbidden:
+                            throw new RedditException(url + " forbidden");
+                    }
+                    responseMessage.EnsureSuccessStatusCode();
+                    return null;
                 }
-                responseMessage.EnsureSuccessStatusCode();
-                return null;
             }
         }
 

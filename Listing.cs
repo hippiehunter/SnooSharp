@@ -17,6 +17,8 @@ namespace SnooSharp
         public ListingData Data { get; set; }
         [JsonIgnore]
         public DateTime? DataAge { get; set; }
+        [JsonIgnore]
+        public string RedirectedUrl { get; set; }
     }
 
     [DataContract]

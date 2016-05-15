@@ -91,6 +91,11 @@ namespace SnooSharp
             {
                 var startOfSubredditName = cleanSubreddit.IndexOf("/r/") + 3;
                 var endOfSubredditName = cleanSubreddit.IndexOf('/', startOfSubredditName);
+                if (endOfSubredditName == -1)
+                    endOfSubredditName = cleanSubreddit.IndexOf('.', startOfSubredditName) - 1;
+                if (endOfSubredditName < 0)
+                    endOfSubredditName = cleanSubreddit.IndexOf('?', startOfSubredditName);
+
                 if (endOfSubredditName != -1)
                     cleanSubreddit = cleanSubreddit.Substring(startOfSubredditName, endOfSubredditName - startOfSubredditName);
                 else
@@ -115,6 +120,12 @@ namespace SnooSharp
                     if (cacheResult != null)
                         return cacheResult;
                 }
+
+                if (body == null)
+                {
+                    //need someplace to put the redirect url
+                    body = new Dictionary<string, string>();
+                }
                 var resultString = await _networkLayer.Get(url, token, progress, body);
                 Listing resultListing = null;
                 if (resultString.StartsWith("["))
@@ -137,6 +148,13 @@ namespace SnooSharp
                 {
                     resultListing = JsonConvert.DeserializeObject<Listing>(resultString);
                 }
+
+                if (body.ContainsKey("redirected-url"))
+                {
+                    url = body["redirected-url"];
+                    resultListing.RedirectedUrl = url;
+                }
+
                 var filteredResult =  await _listingFilter.Filter(resultListing);
                 if(_cacheProvider != null)
                     await _cacheProvider.SetListing(url, filteredResult);
@@ -314,7 +332,13 @@ namespace SnooSharp
 
             if (!name.Contains("/m/"))
             {
-                var subreddit = await GetAuthedString(string.Format("/r/{0}/about{1}.json", MakePlainSubredditName(name), where != null ? "/" + where : ""), token, progress);
+                //this is passed in empty so we can get back the redirect url for things like /r/random
+                var body = new Dictionary<string, string>();
+                var subreddit = await GetAuthedString(string.Format("/r/{0}/about{1}.json", MakePlainSubredditName(name), where != null ? "/" + where : ""), token, progress, body);
+                if (body.ContainsKey("redirected-url"))
+                {
+
+                }
                 //error page
                 if (subreddit.ToLower().StartsWith("<!doctype html>"))
                 {
